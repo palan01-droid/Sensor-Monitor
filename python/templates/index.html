@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Sensor Monitor</title>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --card2: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --danger: #f85149;
+    --warning: #e3b341;
+    --success: #3fb950;
+    --purple: #bc8cff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 24px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+  .badge {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+  .badge-sim  { background: #21262d; color: var(--warning); border: 1px solid var(--warning); }
+  .badge-live { background: #0d1117; color: var(--success); border: 1px solid var(--success); }
+  .badge-off  { background: #21262d; color: var(--muted);   border: 1px solid var(--border); }
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    display: inline-block;
+    margin-right: 4px;
+  }
+  .dot.live { background: var(--success); box-shadow: 0 0 6px var(--success); animation: pulse 2s infinite; }
+  .dot.sim  { background: var(--warning); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .ml-auto { margin-left: auto; }
+  #last-update { color: var(--muted); font-size: 12px; }
+
+  /* ── Alert bar ── */
+  #alert-bar {
+    padding: 0 24px;
+    transition: all 0.3s;
+  }
+  #alert-bar.hidden { display: none; }
+  #alert-bar-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+  }
+  .alert-label { font-size: 11px; font-weight: 600; color: var(--danger); text-transform: uppercase; letter-spacing: 0.5px; }
+  .flag-chip {
+    background: rgba(248, 81, 73, 0.15);
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    animation: flag-in 0.2s ease;
+  }
+  @keyframes flag-in { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  /* ── Main grid ── */
+  main { padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* ── Metric cards ── */
+  .cards-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    transition: border-color 0.3s;
+  }
+  .card.alert { border-color: var(--danger); }
+  .card-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .card-value { font-size: 26px; font-weight: 700; line-height: 1; }
+  .card-unit  { font-size: 13px; color: var(--muted); margin-left: 3px; }
+  .card-sub   { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* color variants */
+  .c-red    { color: #f85149; }
+  .c-blue   { color: #58a6ff; }
+  .c-amber  { color: #e3b341; }
+  .c-purple { color: #bc8cff; }
+  .c-yellow { color: #d29922; }
+  .c-green  { color: #3fb950; }
+
+  /* ── Charts ── */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+  }
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .chart-card h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .chart-wrap { position: relative; height: 160px; }
+
+  /* ── Bottom row ── */
+  .bottom-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 2fr;
+    gap: 14px;
+  }
+  @media (max-width: 900px) { .bottom-row { grid-template-columns: 1fr; } }
+
+  /* ── Boolean sensors ── */
+  .bool-grid { display: flex; flex-direction: column; gap: 10px; }
+  .bool-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: border-color 0.3s, background 0.3s;
+  }
+  .bool-card.active { border-color: var(--danger); background: rgba(248,81,73,0.07); }
+  .bool-icon { font-size: 28px; line-height: 1; }
+  .bool-name { font-size: 13px; font-weight: 600; }
+  .bool-state { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .bool-card.active .bool-state { color: var(--danger); }
+
+  /* ── IMU ── */
+  .imu-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .imu-card h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+  .imu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .imu-group h4 { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .imu-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+  .imu-axis { color: var(--muted); }
+  .imu-val  { font-variant-numeric: tabular-nums; font-weight: 500; }
+
+  /* ── Chat Panel ── */
+  .chat-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  .chat-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .chat-header h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .chat-icon { font-size: 16px; }
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+    min-height: 100px;
+  }
+  .chat-message {
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .chat-message.user {
+    background: rgba(88,166,255,0.15);
+    border-left: 2px solid var(--accent);
+    align-self: flex-end;
+    max-width: 85%;
+  }
+  .chat-message.assistant {
+    background: rgba(63,185,80,0.1);
+    border-left: 2px solid var(--success);
+    align-self: flex-start;
+    max-width: 85%;
+  }
+  .chat-welcome {
+    color: var(--muted);
+    font-size: 12px;
+    font-style: italic;
+    text-align: center;
+    margin: auto 0;
+  }
+  .chat-input-wrapper {
+    display: flex;
+    gap: 8px;
+  }
+  .chat-input {
+    flex: 1;
+    background: var(--card2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    outline: none;
+  }
+  .chat-input:focus { border-color: var(--accent); }
+  .chat-send {
+    background: var(--accent);
+    border: none;
+    color: var(--bg);
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.2s;
+  }
+  .chat-send:hover { background: #69b4ff; }
+  .chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ── Alert History ── */
+  .ah-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .ah-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .ah-header h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  #ah-count { font-size: 11px; }
+  #ah-clear {
+    margin-left: auto;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  #ah-clear:hover { border-color: var(--danger); color: var(--danger); }
+  .ah-list {
+    max-height: 190px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .ah-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 6px 8px;
+    background: var(--card2);
+    border-radius: 6px;
+  }
+  .ah-time { font-size: 11px; color: var(--muted); white-space: nowrap; margin-top: 3px; min-width: 72px; }
+  .ah-flags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .ah-empty { color: var(--muted); font-size: 12px; font-style: italic; }
+</style>
+</head>
+<body>
+
+<header>
+  <span id="status-dot" class="dot"></span>
+  <h1>Multi-Sensor Monitor</h1>
+  <span id="mode-badge" class="badge badge-off">Connecting…</span>
+  <span class="ml-auto" id="last-update"></span>
+</header>
+
+<div id="alert-bar" class="hidden">
+  <div id="alert-bar-inner">
+    <span class="alert-label">&#9888; Active Alerts</span>
+    <div id="flags-container"></div>
+  </div>
+</div>
+
+<main>
+  <!-- Metric cards -->
+  <div class="cards-row">
+    <div class="card" id="card-temp">
+      <div class="card-label">Temperature</div>
+      <div class="card-value c-red">—<span class="card-unit">°C</span></div>
+      <div class="card-sub">Threshold: 32 °C</div>
+    </div>
+    <div class="card" id="card-humidity">
+      <div class="card-label">Humidity</div>
+      <div class="card-value c-blue">—<span class="card-unit">%</span></div>
+      <div class="card-sub">Threshold: 75 %</div>
+    </div>
+    <div class="card" id="card-gas">
+      <div class="card-label">Gas (MQ-2)</div>
+      <div class="card-value c-amber">—<span class="card-unit">ADC</span></div>
+      <div class="card-sub">Threshold: 400</div>
+    </div>
+    <div class="card" id="card-alcohol">
+      <div class="card-label">Alcohol (MQ-3)</div>
+      <div class="card-value c-purple">—<span class="card-unit">ADC</span></div>
+      <div class="card-sub">Threshold: 250</div>
+    </div>
+    <div class="card" id="card-light">
+      <div class="card-label">Light (LDR)</div>
+      <div class="card-value c-yellow">—<span class="card-unit">/1023</span></div>
+      <div class="card-sub" id="card-light-pct"></div>
+    </div>
+    <div class="card" id="card-distance">
+      <div class="card-label">Distance</div>
+      <div class="card-value c-green">—<span class="card-unit">cm</span></div>
+      <div class="card-sub">Threshold: &lt; 10 cm</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Temperature &amp; Humidity</h3>
+      <div class="chart-wrap"><canvas id="chartTH"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Gas &amp; Alcohol Levels</h3>
+      <div class="chart-wrap"><canvas id="chartGA"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Light Level</h3>
+      <div class="chart-wrap"><canvas id="chartLight"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Distance</h3>
+      <div class="chart-wrap"><canvas id="chartDist"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Alert History -->
+  <div class="ah-panel">
+    <div class="ah-header">
+      <h3>Alert History</h3>
+      <span id="ah-count" class="badge badge-off">0 events</span>
+      <button id="ah-clear">Clear</button>
+    </div>
+    <div id="ah-list" class="ah-list">
+      <span class="ah-empty">No alerts recorded yet.</span>
+    </div>
+  </div>
+
+  <!-- Bottom row: booleans | IMU | Chat -->
+  <div class="bottom-row">
+
+    <div class="bool-grid">
+      <div class="bool-card" id="bool-vib">
+        <div class="bool-icon">📳</div>
+        <div>
+          <div class="bool-name">Vibration</div>
+          <div class="bool-state">No vibration</div>
+        </div>
+      </div>
+      <div class="bool-card" id="bool-ir">
+        <div class="bool-icon">🔴</div>
+        <div>
+          <div class="bool-name">IR Obstacle</div>
+          <div class="bool-state">Path clear</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="imu-card">
+      <h3>IMU — MPU-6050</h3>
+      <div class="imu-grid">
+        <div class="imu-group">
+          <h4>Accelerometer (g)</h4>
+          <div class="imu-row"><span class="imu-axis">X</span><span class="imu-val" id="ax">—</span></div>
+          <div class="imu-row"><span class="imu-axis">Y</span><span class="imu-val" id="ay">—</span></div>
+          <div class="imu-row"><span class="imu-axis">Z</span><span class="imu-val" id="az">—</span></div>
+        </div>
+        <div class="imu-group">
+          <h4>Gyroscope (°/s)</h4>
+          <div class="imu-row"><span class="imu-axis">X</span><span class="imu-val" id="gx">—</span></div>
+          <div class="imu-row"><span class="imu-axis">Y</span><span class="imu-val" id="gy">—</span></div>
+          <div class="imu-row"><span class="imu-axis">Z</span><span class="imu-val" id="gz">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-panel">
+      <div class="chat-header">
+        <span class="chat-icon">💬</span>
+        <h3>Sensor Q&A</h3>
+      </div>
+      <div id="chat-messages" class="chat-messages">
+        <div class="chat-welcome">Ask questions about your sensor data…</div>
+      </div>
+      <div class="chat-input-wrapper">
+        <input type="text" id="chat-input" placeholder="What's happening with the temperature?" class="chat-input">
+        <button id="chat-send" class="chat-send" title="Send">↑</button>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+const socket = io();
+const N = 60;
+let lastSensorData = null;
+let groqEnabled = false;
+let alertHistory = [];
+let chatMessages = [];
+
+/* ── helpers ── */
+function makeLabels() { return Array(N).fill(''); }
+function makeData()   { return Array(N).fill(null); }
+function push(arr, val) { arr.push(val); arr.shift(); }
+
+function makeChart(id, datasets, yMin, yMax) {
+  return new Chart(document.getElementById(id), {
+    type: 'line',
+    data: { labels: makeLabels(), datasets },
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: '#8b949e', boxWidth: 12, font: { size: 11 } }
+        }
+      },
+      scales: {
+        x: { display: false },
+        y: {
+          min: yMin, max: yMax,
+          grid: { color: 'rgba(48,54,61,0.6)' },
+          ticks: { color: '#8b949e', font: { size: 10 }, maxTicksLimit: 5 }
+        }
+      }
+    }
+  });
+}
+
+function ds(label, color, data) {
+  return {
+    label, data: data || makeData(),
+    borderColor: color,
+    backgroundColor: color.replace(')', ', 0.08)').replace('rgb', 'rgba'),
+    borderWidth: 1.5,
+    pointRadius: 0,
+    tension: 0.4,
+    fill: true,
+  };
+}
+
+function dsThreshold(label, color, value) {
+  return {
+    label, data: Array(N).fill(value),
+    borderColor: color,
+    borderWidth: 1,
+    borderDash: [4, 4],
+    pointRadius: 0,
+    fill: false,
+    tension: 0,
+  };
+}
+
+/* ── charts ── */
+const chartTH = makeChart('chartTH', [
+  ds('Temp (°C)', 'rgb(248,81,73)'),
+  ds('Humidity (%)', 'rgb(88,166,255)'),
+  dsThreshold('Temp limit', 'rgba(248,81,73,0.4)', 32),
+  dsThreshold('Hum limit', 'rgba(88,166,255,0.4)', 75),
+], 0, 100);
+
+const chartGA = makeChart('chartGA', [
+  ds('Gas (MQ-2)', 'rgb(227,179,65)'),
+  ds('Alcohol (MQ-3)', 'rgb(188,140,255)'),
+  dsThreshold('Gas limit', 'rgba(227,179,65,0.4)', 400),
+  dsThreshold('Alc limit', 'rgba(188,140,255,0.4)', 250),
+], 0, 600);
+
+const chartLight = makeChart('chartLight', [
+  ds('Light', 'rgb(210,153,34)'),
+], 0, 1023);
+
+const chartDist = makeChart('chartDist', [
+  ds('Distance (cm)', 'rgb(63,185,80)'),
+  dsThreshold('Close limit', 'rgba(248,81,73,0.5)', 10),
+], 0, 120);
+
+/* ── card helpers ── */
+function cardValue(id, val, unit) {
+  const el = document.getElementById(id);
+  el.querySelector('.card-value').innerHTML = `${val}<span class="card-unit">${unit}</span>`;
+}
+
+function setAlert(cardId, active) {
+  document.getElementById(cardId).classList.toggle('alert', active);
+}
+
+/* ── boolean sensor ── */
+function setBool(id, active, trueLabel, falseLabel) {
+  const el = document.getElementById(id);
+  el.classList.toggle('active', active);
+  el.querySelector('.bool-state').textContent = active ? trueLabel : falseLabel;
+}
+
+/* ── update everything ── */
+function update(sensor, simulated) {
+  const f = sensor.flags || [];
+  const fSet = new Set(f);
+
+  /* metric cards */
+  cardValue('card-temp',     sensor.temp.toFixed(1),     '°C');
+  cardValue('card-humidity', sensor.humidity.toFixed(1),  '%');
+  cardValue('card-gas',      sensor.gas,                 'ADC');
+  cardValue('card-alcohol',  sensor.alcohol,             'ADC');
+  cardValue('card-light',    sensor.light,               '/1023');
+  cardValue('card-distance', sensor.distance.toFixed(1), 'cm');
+  document.getElementById('card-light-pct').textContent =
+    `${((sensor.light / 1023) * 100).toFixed(0)} %`;
+
+  setAlert('card-temp',     fSet.has('HIGH_TEMP'));
+  setAlert('card-humidity', fSet.has('HIGH_HUMIDITY'));
+  setAlert('card-gas',      fSet.has('HIGH_GAS'));
+  setAlert('card-alcohol',  fSet.has('HIGH_ALCOHOL'));
+  setAlert('card-distance', fSet.has('CLOSE_OBJECT'));
+
+  /* charts — push latest values */
+  push(chartTH.data.datasets[0].data,    sensor.temp);
+  push(chartTH.data.datasets[1].data,    sensor.humidity);
+  push(chartGA.data.datasets[0].data,    sensor.gas);
+  push(chartGA.data.datasets[1].data,    sensor.alcohol);
+  push(chartLight.data.datasets[0].data, sensor.light);
+  push(chartDist.data.datasets[0].data,  sensor.distance);
+
+  chartTH.update();
+  chartGA.update();
+  chartLight.update();
+  chartDist.update();
+
+  /* booleans */
+  setBool('bool-vib', sensor.vibration,   'Vibration detected!', 'No vibration');
+  setBool('bool-ir',  sensor.ir_obstacle, 'Obstacle detected!',  'Path clear');
+
+  /* IMU */
+  document.getElementById('ax').textContent = sensor.accel_x.toFixed(3);
+  document.getElementById('ay').textContent = sensor.accel_y.toFixed(3);
+  document.getElementById('az').textContent = sensor.accel_z.toFixed(3);
+  document.getElementById('gx').textContent = sensor.gyro_x.toFixed(2);
+  document.getElementById('gy').textContent = sensor.gyro_y.toFixed(2);
+  document.getElementById('gz').textContent = sensor.gyro_z.toFixed(2);
+
+  /* flags bar */
+  const bar = document.getElementById('alert-bar');
+  const fc  = document.getElementById('flags-container');
+  if (f.length) {
+    bar.classList.remove('hidden');
+    fc.innerHTML = f.map(fl => `<span class="flag-chip">${fl.replace(/_/g,' ')}</span>`).join('');
+  } else {
+    bar.classList.add('hidden');
+    fc.innerHTML = '';
+  }
+
+  /* header */
+  const dot   = document.getElementById('status-dot');
+  const badge = document.getElementById('mode-badge');
+  if (simulated) {
+    dot.className = 'dot sim';
+    badge.textContent = 'SIMULATION';
+    badge.className = 'badge badge-sim';
+  } else {
+    dot.className = 'dot live';
+    badge.textContent = 'LIVE';
+    badge.className = 'badge badge-live';
+  }
+
+  const now = new Date();
+  document.getElementById('last-update').textContent =
+    `Updated ${now.toLocaleTimeString()}`;
+}
+
+/* ── AI panel ── */
+function showAnalysis(text) {
+  const el = document.getElementById('ai-text');
+  el.className = '';
+  el.textContent = text;
+  document.getElementById('ai-ts').textContent =
+    `Last analysis: ${new Date().toLocaleTimeString()}`;
+}
+
+function showThinking() {
+  const el = document.getElementById('ai-text');
+  el.className = '';
+  el.innerHTML = '<div class="ai-thinking"><span></span><span></span><span></span></div>';
+}
+
+/* ── alert history ── */
+function renderHistory() {
+  const el = document.getElementById('ah-list');
+  const count = document.getElementById('ah-count');
+  if (!alertHistory.length) {
+    el.innerHTML = '<span class="ah-empty">No alerts recorded yet.</span>';
+    count.textContent = '0 events';
+    count.className = 'badge badge-off';
+    return;
+  }
+  count.textContent = `${alertHistory.length} event${alertHistory.length > 1 ? 's' : ''}`;
+  count.className = 'badge badge-sim';
+  el.innerHTML = alertHistory.slice().reverse().map(e => {
+    const d = new Date(e.ts * 1000);
+    const chips = e.flags.map(f => `<span class="flag-chip">${f.replace(/_/g,' ')}</span>`).join('');
+    return `<div class="ah-row"><span class="ah-time">${d.toLocaleTimeString()}</span><div class="ah-flags">${chips}</div></div>`;
+  }).join('');
+}
+
+document.getElementById('ah-clear').addEventListener('click', () => {
+  alertHistory = [];
+  renderHistory();
+});
+
+/* ── chat helpers ── */
+function renderChat() {
+  const el = document.getElementById('chat-messages');
+  if (!chatMessages.length) {
+    el.innerHTML = '<div class="chat-welcome">Ask questions about your sensor data…</div>';
+    return;
+  }
+  el.innerHTML = chatMessages.map(msg => {
+    const d = new Date(msg.ts * 1000);
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `<div class="chat-message ${msg.role}"><strong>${time}:</strong> ${msg.content}</div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function addChatMessage(content, role) {
+  chatMessages.push({ content, role, ts: Date.now() / 1000 });
+  if (chatMessages.length > 50) chatMessages.shift();
+  renderChat();
+}
+
+document.getElementById('chat-send').addEventListener('click', () => {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg || !groqEnabled) return;
+  addChatMessage(msg, 'user');
+  input.value = '';
+  socket.emit('chat_message', { message: msg });
+});
+
+document.getElementById('chat-input').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    document.getElementById('chat-send').click();
+  }
+});
+
+/* ── socket events ── */
+socket.on('connect', () => {
+  document.getElementById('status-dot').className = 'dot live';
+});
+
+socket.on('config', ({ groq_available, alert_history, chat_history }) => {
+  groqEnabled = groq_available;
+  if (alert_history && alert_history.length) {
+    alertHistory = alert_history;
+    renderHistory();
+  }
+  if (chat_history && chat_history.length) {
+    chatMessages = chat_history;
+    renderChat();
+  }
+  if (!groq_available) {
+    document.getElementById('chat-input').placeholder = 'AI chat not available';
+    document.getElementById('chat-input').disabled = true;
+    document.getElementById('chat-send').disabled = true;
+  }
+});
+
+socket.on('new_alert', entry => {
+  alertHistory.push(entry);
+  if (alertHistory.length > 50) alertHistory.shift();
+  renderHistory();
+});
+
+socket.on('disconnect', () => {
+  document.getElementById('status-dot').className = 'dot';
+  document.getElementById('mode-badge').textContent = 'Disconnected';
+  document.getElementById('mode-badge').className = 'badge badge-off';
+});
+
+socket.on('sensor_data', ({ sensor, simulated, groq_analysis }) => {
+  lastSensorData = sensor;
+  update(sensor, simulated);
+  if (groq_analysis) showAnalysis(groq_analysis);
+});
+
+socket.on('groq_analysis', ({ text }) => {
+  showAnalysis(text);
+  document.getElementById('analyze-btn').disabled = false;
+  document.getElementById('analyze-btn').textContent = 'Analyze Now';
+});
+
+socket.on('chat_response', ({ message, error }) => {
+  if (error) {
+    addChatMessage(`Error: ${error}`, 'assistant');
+  } else if (message) {
+    addChatMessage(message, 'assistant');
+  }
+});
+
+socket.on('chat_message_received', ({ message }) => {
+  // Message already added locally
+});
+
+/* ── Analyze Now button ── */
+document.getElementById('analyze-btn').addEventListener('click', () => {
+  if (!lastSensorData || !groqEnabled) return;
+  showThinking();
+  const btn = document.getElementById('analyze-btn');
+  btn.disabled = true;
+  btn.textContent = 'Analyzing…';
+  socket.emit('request_analysis', lastSensorData);
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.textContent = 'Analyze Now';
+  }, 32000);
+});
+</script>
+</body>
+</html>
