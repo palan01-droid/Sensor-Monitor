@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<title>SensorMonitor — Settings</title>
+<style>
+:root {
+  --bg:     #080d18;
+  --card:   #0e1420;
+  --card2:  #131924;
+  --border: #1e2638;
+  --border2:#283044;
+  --text:   #dde4f0;
+  --muted:  #677590;
+  --accent: #58a6ff;
+  --danger: #f85149;
+  --warn:   #e3b341;
+  --success:#3fb950;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 24px; height: 56px;
+  background: rgba(8,13,24,0.97);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+  backdrop-filter: blur(12px);
+}
+.header-brand { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+.header-icon {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, #1d4ed8, #7c3aed);
+  border-radius: 7px; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; flex-shrink: 0;
+}
+.header-title { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; color: var(--text); }
+.back-link {
+  color: var(--muted); text-decoration: none; font-size: 13px;
+  margin-left: auto; transition: color 0.2s;
+}
+.back-link:hover { color: var(--accent); }
+
+main { max-width: 680px; margin: 0 auto; padding: 32px 24px 64px; display: flex; flex-direction: column; gap: 22px; }
+
+h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; }
+.page-sub { font-size: 13px; color: var(--muted); margin-top: -14px; }
+
+.panel {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden;
+}
+.panel-hdr {
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+.panel-hdr h2 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
+.panel-body { padding: 6px 0; }
+
+.setting-row {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 18px;
+}
+.setting-row + .setting-row { border-top: 1px solid var(--border); }
+.setting-info { flex: 1; min-width: 0; }
+.setting-name { font-size: 13px; font-weight: 600; }
+.setting-desc { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.45; }
+
+select, input[type="number"] {
+  appearance: none; background: var(--card2); border: 1px solid var(--border2);
+  color: var(--text); border-radius: 8px; padding: 8px 12px;
+  font-size: 13px; font-family: inherit; outline: none; cursor: pointer;
+  transition: border-color 0.2s; min-width: 110px; text-align: right;
+}
+select:focus, input[type="number"]:focus { border-color: var(--accent); }
+input[type="number"] { cursor: text; width: 110px; }
+
+/* Toggle */
+.toggle { position: relative; width: 42px; height: 24px; flex-shrink: 0; cursor: pointer; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-track {
+  position: absolute; inset: 0; border-radius: 24px;
+  background: var(--card2); border: 1px solid var(--border2);
+  transition: background 0.2s, border-color 0.2s;
+}
+.toggle-track::before {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--muted); transition: transform 0.2s, background 0.2s;
+}
+.toggle input:checked + .toggle-track { background: rgba(88,166,255,0.25); border-color: rgba(88,166,255,0.5); }
+.toggle input:checked + .toggle-track::before { transform: translateX(18px); background: var(--accent); }
+
+.account-email { font-size: 13px; color: var(--text); font-weight: 500; }
+.btn {
+  background: transparent; border: 1px solid var(--border2); color: var(--muted);
+  padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: inherit; transition: border-color 0.2s, color 0.2s, background 0.2s;
+  text-decoration: none; display: inline-block;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn-danger:hover { border-color: var(--danger); color: var(--danger); background: rgba(248,81,73,0.06); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.danger-panel { border-color: rgba(248,81,73,0.25); }
+.danger-panel .panel-hdr h2 { color: var(--danger); }
+
+.save-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: rgba(8,13,24,0.97); border-top: 1px solid var(--border);
+  backdrop-filter: blur(12px); padding: 12px 24px;
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  transform: translateY(100%); transition: transform 0.25s ease;
+  z-index: 100;
+}
+.save-bar.visible { transform: none; }
+.save-bar span { font-size: 12px; color: var(--muted); }
+.save-btn {
+  background: linear-gradient(135deg, #1d4ed8, #7c3aed); border: none; color: white;
+  padding: 9px 24px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: inherit; transition: opacity 0.2s;
+}
+.save-btn:hover { opacity: 0.88; }
+.save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.toast {
+  position: fixed; top: 70px; left: 50%; transform: translateX(-50%) translateY(-8px);
+  background: var(--card2); border: 1px solid rgba(63,185,80,0.4); color: var(--success);
+  padding: 9px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s;
+  z-index: 200;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.error { border-color: rgba(248,81,73,0.4); color: var(--danger); }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="/dashboard" class="header-brand">
+    <div class="header-icon">⬡</div>
+    <span class="header-title">SensorMonitor</span>
+  </a>
+  <a href="/dashboard" class="back-link">← Back to Dashboard</a>
+</header>
+
+<main>
+  <h1>Settings</h1>
+  <p class="page-sub">Configure how SensorMonitor connects, stores, and analyzes your data.</p>
+
+  <!-- Account -->
+  <div class="panel">
+    <div class="panel-hdr"><h2>Account</h2></div>
+    <div class="panel-body">
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Signed in as</div>
+          <div class="setting-desc account-email">{{ user_email or 'Local mode — no account' }}</div>
+        </div>
+        {% if user_email %}<a href="/logout" class="btn">Sign out</a>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Connection -->
+  <div class="panel">
+    <div class="panel-hdr"><h2>Connection</h2></div>
+    <div class="panel-body">
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Default baud rate</div>
+          <div class="setting-desc">Pre-selected in the port picker. Most boards use 115200.</div>
+        </div>
+        <select id="default_baud" data-setting>
+          <option value="9600">9600</option>
+          <option value="19200">19200</option>
+          <option value="38400">38400</option>
+          <option value="57600">57600</option>
+          <option value="115200">115200</option>
+          <option value="230400">230400</option>
+          <option value="250000">250000</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data -->
+  <div class="panel">
+    <div class="panel-hdr"><h2>Data Storage</h2></div>
+    <div class="panel-body">
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Write interval</div>
+          <div class="setting-desc">Seconds between database writes. Lower = more detail, larger database.</div>
+        </div>
+        <input type="number" id="db_write_interval" data-setting min="1" max="3600" step="1">
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Data retention</div>
+          <div class="setting-desc">Readings and alerts older than this many days are deleted automatically.</div>
+        </div>
+        <input type="number" id="retention_days" data-setting min="1" max="365" step="1">
+      </div>
+    </div>
+  </div>
+
+  <!-- AI -->
+  <div class="panel">
+    <div class="panel-hdr"><h2>Assistant</h2></div>
+    <div class="panel-body">
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Automatic analysis</div>
+          <div class="setting-desc">Analyze readings and suggest actions whenever a new alert fires.</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="auto_analysis" data-setting>
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Danger zone -->
+  <div class="panel danger-panel">
+    <div class="panel-hdr"><h2>Danger Zone</h2></div>
+    <div class="panel-body">
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Clear sensor history</div>
+          <div class="setting-desc">Permanently delete all stored readings. Live data is unaffected.</div>
+        </div>
+        <button class="btn btn-danger" onclick="clearData('readings', this)">Clear readings</button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Clear alert history</div>
+          <div class="setting-desc">Permanently delete all recorded alerts.</div>
+        </div>
+        <button class="btn btn-danger" onclick="clearData('alerts', this)">Clear alerts</button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Clear chat history</div>
+          <div class="setting-desc">Erase the assistant's conversation memory.</div>
+        </div>
+        <button class="btn btn-danger" onclick="clearData('chat', this)">Clear chat</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="save-bar" id="save-bar">
+  <span>You have unsaved changes</span>
+  <button class="save-btn" id="save-btn" onclick="saveSettings()">Save Changes</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+let original = {};
+
+function currentValues() {
+  return {
+    default_baud: parseInt(document.getElementById('default_baud').value),
+    db_write_interval: parseFloat(document.getElementById('db_write_interval').value),
+    retention_days: parseInt(document.getElementById('retention_days').value),
+    auto_analysis: document.getElementById('auto_analysis').checked,
+  };
+}
+
+function setForm(s) {
+  document.getElementById('default_baud').value = s.default_baud;
+  document.getElementById('db_write_interval').value = s.db_write_interval;
+  document.getElementById('retention_days').value = s.retention_days;
+  document.getElementById('auto_analysis').checked = !!s.auto_analysis;
+}
+
+function checkDirty() {
+  const cur = currentValues();
+  const dirty = Object.keys(cur).some(k => cur[k] !== original[k]);
+  document.getElementById('save-bar').classList.toggle('visible', dirty);
+}
+
+document.querySelectorAll('[data-setting]').forEach(el => {
+  el.addEventListener('change', checkDirty);
+  el.addEventListener('input', checkDirty);
+});
+
+function toast(msg, isError) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+async function loadSettings() {
+  try {
+    const res = await fetch('/api/settings');
+    original = await res.json();
+    setForm(original);
+  } catch {
+    toast('Could not load settings', true);
+  }
+}
+
+async function saveSettings() {
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify(currentValues()),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      toast((data.errors || ['Save failed']).join(', '), true);
+    } else {
+      original = data.settings;
+      setForm(original);
+      document.getElementById('save-bar').classList.remove('visible');
+      toast('Settings saved');
+    }
+  } catch {
+    toast('Save failed — is the server running?', true);
+  }
+  btn.disabled = false; btn.textContent = 'Save Changes';
+}
+
+async function clearData(target, btn) {
+  const labels = { readings: 'all stored sensor readings', alerts: 'all alert history', chat: 'the chat history' };
+  if (!confirm(`This will permanently delete ${labels[target]}. Continue?`)) return;
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/clear-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify({ target }),
+    });
+    if (res.ok) toast('Cleared');
+    else toast('Failed to clear', true);
+  } catch {
+    toast('Failed to clear', true);
+  }
+  btn.disabled = false;
+}
+
+loadSettings();
+</script>
+</body>
+</html>

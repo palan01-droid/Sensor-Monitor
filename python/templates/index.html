@@ -3,375 +3,568 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Multi-Sensor Monitor</title>
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<title>SensorMonitor — Dashboard</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
-  :root {
-    --bg: #0d1117;
-    --card: #161b22;
-    --card2: #1c2128;
-    --border: #30363d;
-    --text: #e6edf3;
-    --muted: #8b949e;
-    --accent: #58a6ff;
-    --danger: #f85149;
-    --warning: #e3b341;
-    --success: #3fb950;
-    --purple: #bc8cff;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    font-size: 14px;
-    min-height: 100vh;
-  }
+:root {
+  --bg:     #080d18;
+  --card:   #0e1420;
+  --card2:  #131924;
+  --border: #1e2638;
+  --border2:#283044;
+  --text:   #dde4f0;
+  --muted:  #677590;
+  --accent: #58a6ff;
+  --danger: #f85149;
+  --warn:   #e3b341;
+  --success:#3fb950;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
 
-  /* ── Header ── */
-  header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 14px 24px;
-    background: var(--card);
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
-  .badge {
-    font-size: 11px;
-    padding: 3px 8px;
-    border-radius: 20px;
-    font-weight: 500;
-    letter-spacing: 0.3px;
-  }
-  .badge-sim  { background: #21262d; color: var(--warning); border: 1px solid var(--warning); }
-  .badge-live { background: #0d1117; color: var(--success); border: 1px solid var(--success); }
-  .badge-off  { background: #21262d; color: var(--muted);   border: 1px solid var(--border); }
-  .dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--muted);
-    display: inline-block;
-    margin-right: 4px;
-  }
-  .dot.live { background: var(--success); box-shadow: 0 0 6px var(--success); animation: pulse 2s infinite; }
-  .dot.sim  { background: var(--warning); }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-  .ml-auto { margin-left: auto; }
-  #last-update { color: var(--muted); font-size: 12px; }
+/* ── Header ── */
+header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 24px; height: 56px;
+  background: rgba(8,13,24,0.97);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+  backdrop-filter: blur(12px);
+}
+.header-brand { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+.header-icon {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, #1d4ed8, #7c3aed);
+  border-radius: 7px; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; flex-shrink: 0;
+}
+.header-title { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; color: var(--text); }
+.badge { font-size: 10px; padding: 3px 9px; border-radius: 20px; font-weight: 600; letter-spacing: 0.4px; }
+.badge-sim  { background: rgba(227,179,65,0.12); color: var(--warn);    border: 1px solid rgba(227,179,65,0.3); }
+.badge-live { background: rgba(63,185,80,0.12);  color: var(--success); border: 1px solid rgba(63,185,80,0.3); }
+.badge-off  { background: rgba(103,117,144,0.12);color: var(--muted);   border: 1px solid var(--border); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); display: inline-block; margin-right: 3px; }
+.dot.live { background: var(--success); box-shadow: 0 0 6px var(--success); animation: pulse 2s infinite; }
+.dot.sim  { background: var(--warn); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.ml-auto { margin-left: auto; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+#last-update { color: var(--muted); font-size: 11px; }
+.user-chip {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--card2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 4px 12px 4px 8px; font-size: 12px; color: var(--muted);
+}
+.user-avatar {
+  width: 20px; height: 20px;
+  background: linear-gradient(135deg, #1d4ed8, #7c3aed);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: white; font-weight: 700;
+}
+.logout-btn {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;
+  font-family: inherit; transition: border-color 0.2s, color 0.2s;
+}
+.logout-btn:hover { border-color: var(--danger); color: var(--danger); }
+.settings-link {
+  color: var(--muted); text-decoration: none; font-size: 16px;
+  width: 28px; height: 28px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); transition: color 0.2s, border-color 0.2s, transform 0.4s;
+}
+.settings-link:hover { color: var(--accent); border-color: var(--accent); transform: rotate(60deg); }
 
-  /* ── Alert bar ── */
-  #alert-bar {
-    padding: 0 24px;
-    transition: all 0.3s;
-  }
-  #alert-bar.hidden { display: none; }
-  #alert-bar-inner {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border);
-    align-items: center;
-  }
-  .alert-label { font-size: 11px; font-weight: 600; color: var(--danger); text-transform: uppercase; letter-spacing: 0.5px; }
-  .flag-chip {
-    background: rgba(248, 81, 73, 0.15);
-    border: 1px solid var(--danger);
-    color: var(--danger);
-    font-size: 11px;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-weight: 600;
-    animation: flag-in 0.2s ease;
-  }
-  @keyframes flag-in { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+/* ── Port chip in header ── */
+.port-chip {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(63,185,80,0.1); border: 1px solid rgba(63,185,80,0.3);
+  border-radius: 20px; padding: 4px 10px 4px 8px; font-size: 11px;
+  color: var(--success); font-family: 'SF Mono','Fira Code',monospace;
+}
+.port-chip-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); box-shadow: 0 0 5px var(--success); animation: pulse 2s infinite; flex-shrink: 0; }
+.port-disconnect {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 0 0 0 4px; transition: color 0.2s;
+}
+.port-disconnect:hover { color: var(--danger); }
 
-  /* ── Main grid ── */
-  main { padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; }
+/* alert bar */
+#alert-bar { padding: 0 24px; }
+#alert-bar.hidden { display: none; }
+#alert-bar-inner {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 9px 0; border-bottom: 1px solid var(--border); align-items: center;
+}
+.alert-label { font-size: 10px; font-weight: 700; color: var(--danger); text-transform: uppercase; letter-spacing: 0.8px; margin-right: 4px; }
+.flag-chip {
+  background: rgba(248,81,73,0.12); border: 1px solid rgba(248,81,73,0.4);
+  color: var(--danger); font-size: 10px; padding: 3px 10px; border-radius: 20px;
+  font-weight: 600; letter-spacing: 0.3px; animation: flagin 0.2s ease;
+}
+@keyframes flagin { from{transform:scale(0.8);opacity:0} to{transform:scale(1);opacity:1} }
 
-  /* ── Metric cards ── */
-  .cards-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 12px;
-  }
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 16px;
-    transition: border-color 0.3s;
-  }
-  .card.alert { border-color: var(--danger); }
-  .card-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-  .card-value { font-size: 26px; font-weight: 700; line-height: 1; }
-  .card-unit  { font-size: 13px; color: var(--muted); margin-left: 3px; }
-  .card-sub   { font-size: 11px; color: var(--muted); margin-top: 4px; }
+/* port selector */
+.port-selector {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  width: 100%; max-width: 520px; margin-bottom: 32px;
+}
+.port-row {
+  display: flex; gap: 8px; width: 100%; align-items: center;
+}
+.port-select-wrap { position: relative; flex: 1; }
+.port-select-wrap select, .baud-select, .port-row select {
+  appearance: none; background: var(--card); border: 1px solid var(--border2);
+  color: var(--text); border-radius: 8px; padding: 9px 32px 9px 12px;
+  font-size: 13px; font-family: inherit; cursor: pointer; outline: none;
+  transition: border-color 0.2s; width: 100%;
+}
+.port-select-wrap select:focus, .baud-select:focus { border-color: var(--accent); }
+.port-select-wrap::after {
+  content: '▾'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  color: var(--muted); pointer-events: none; font-size: 12px;
+}
+.baud-wrap { position: relative; width: 110px; flex-shrink: 0; }
+.baud-wrap::after {
+  content: '▾'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  color: var(--muted); pointer-events: none; font-size: 12px;
+}
+.port-refresh-btn {
+  background: var(--card); border: 1px solid var(--border2); color: var(--muted);
+  border-radius: 8px; padding: 9px 12px; font-size: 15px; cursor: pointer;
+  transition: border-color 0.2s, color 0.2s; flex-shrink: 0; line-height: 1;
+}
+.port-refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+.port-connect-btn {
+  background: linear-gradient(135deg, #1d4ed8, #7c3aed); border: none;
+  color: white; border-radius: 8px; padding: 9px 20px; font-size: 13px;
+  font-weight: 600; cursor: pointer; font-family: inherit;
+  transition: opacity 0.2s; flex-shrink: 0;
+}
+.port-connect-btn:hover { opacity: 0.88; }
+.port-connect-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.port-status-msg {
+  font-size: 12px; color: var(--muted); text-align: center;
+}
+.port-status-msg.error { color: var(--danger); }
+.port-status-msg.success { color: var(--success); }
 
-  /* color variants */
-  .c-red    { color: #f85149; }
-  .c-blue   { color: #58a6ff; }
-  .c-amber  { color: #e3b341; }
-  .c-purple { color: #bc8cff; }
-  .c-yellow { color: #d29922; }
-  .c-green  { color: #3fb950; }
+/* waiting screen */
+#waiting {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 60px 24px 80px; gap: 0;
+}
 
-  /* ── Charts ── */
-  .charts-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 14px;
-  }
-  .chart-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 16px;
-  }
-  .chart-card h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
-  .chart-wrap { position: relative; height: 160px; }
+/* Radar animation */
+.radar {
+  position: relative; width: 130px; height: 130px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 32px;
+}
+.radar-ring {
+  position: absolute; border-radius: 50%;
+  border: 1px solid var(--accent); opacity: 0;
+  animation: radarpulse 3s ease-out infinite;
+}
+.r1 { width: 60px;  height: 60px;  animation-delay: 0s; }
+.r2 { width: 95px;  height: 95px;  animation-delay: 1s; }
+.r3 { width: 130px; height: 130px; animation-delay: 2s; }
+@keyframes radarpulse {
+  0%   { transform: scale(0.6); opacity: 0.7; }
+  100% { transform: scale(1);   opacity: 0; }
+}
+.radar-center {
+  width: 50px; height: 50px;
+  background: linear-gradient(135deg, #1d4ed8, #7c3aed);
+  border-radius: 14px; display: flex; align-items: center; justify-content: center;
+  font-size: 24px; z-index: 1;
+  box-shadow: 0 0 28px rgba(88,166,255,0.35);
+}
 
-  /* ── Bottom row ── */
-  .bottom-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr 2fr;
-    gap: 14px;
-  }
-  @media (max-width: 900px) { .bottom-row { grid-template-columns: 1fr; } }
+.waiting-title { font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 8px; letter-spacing: -0.4px; }
+.waiting-sub { font-size: 14px; color: var(--muted); text-align: center; max-width: 400px; line-height: 1.65; margin-bottom: 40px; }
 
-  /* ── Boolean sensors ── */
-  .bool-grid { display: flex; flex-direction: column; gap: 10px; }
-  .bool-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 16px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    transition: border-color 0.3s, background 0.3s;
-  }
-  .bool-card.active { border-color: var(--danger); background: rgba(248,81,73,0.07); }
-  .bool-icon { font-size: 28px; line-height: 1; }
-  .bool-name { font-size: 13px; font-weight: 600; }
-  .bool-state { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .bool-card.active .bool-state { color: var(--danger); }
+/* Connection guide */
+.connect-guide {
+  display: flex; flex-direction: column; gap: 12px;
+  width: 100%; max-width: 560px; margin-bottom: 36px;
+}
+.guide-step {
+  display: flex; gap: 16px; align-items: flex-start;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 18px;
+}
+.step-num {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, #1d4ed8, #7c3aed);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: white; margin-top: 1px;
+}
+.step-body strong { display: block; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.step-body span   { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.step-code {
+  display: block; background: var(--card2); border: 1px solid var(--border2);
+  border-radius: 7px; padding: 8px 12px; margin-top: 8px;
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px;
+  color: #7dd3fc; letter-spacing: 0.2px; white-space: pre; overflow-x: auto;
+}
 
-  /* ── IMU ── */
-  .imu-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 16px;
-  }
-  .imu-card h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
-  .imu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .imu-group h4 { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
-  .imu-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
-  .imu-axis { color: var(--muted); }
-  .imu-val  { font-variant-numeric: tabular-nums; font-weight: 500; }
 
-  /* ── Chat Panel ── */
-  .chat-panel {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 16px;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-  }
-  .chat-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 12px;
-  }
-  .chat-header h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
-  .chat-icon { font-size: 16px; }
-  .chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 12px;
-    min-height: 100px;
-  }
-  .chat-message {
-    padding: 8px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    line-height: 1.5;
-  }
-  .chat-message.user {
-    background: rgba(88,166,255,0.15);
-    border-left: 2px solid var(--accent);
-    align-self: flex-end;
-    max-width: 85%;
-  }
-  .chat-message.assistant {
-    background: rgba(63,185,80,0.1);
-    border-left: 2px solid var(--success);
-    align-self: flex-start;
-    max-width: 85%;
-  }
-  .chat-welcome {
-    color: var(--muted);
-    font-size: 12px;
-    font-style: italic;
-    text-align: center;
-    margin: auto 0;
-  }
-  .chat-input-wrapper {
-    display: flex;
-    gap: 8px;
-  }
-  .chat-input {
-    flex: 1;
-    background: var(--card2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 8px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    outline: none;
-  }
-  .chat-input:focus { border-color: var(--accent); }
-  .chat-send {
-    background: var(--accent);
-    border: none;
-    color: var(--bg);
-    padding: 8px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-    transition: background 0.2s;
-  }
-  .chat-send:hover { background: #69b4ff; }
-  .chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
+/* main */
+main { padding: 18px 24px; display: flex; flex-direction: column; gap: 18px; }
 
-  /* ── Alert History ── */
-  .ah-panel {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 16px;
-  }
-  .ah-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .ah-header h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
-  #ah-count { font-size: 11px; }
-  #ah-clear {
-    margin-left: auto;
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    padding: 3px 10px;
-    border-radius: 6px;
-    font-size: 11px;
-    cursor: pointer;
-    transition: border-color 0.2s, color 0.2s;
-  }
-  #ah-clear:hover { border-color: var(--danger); color: var(--danger); }
-  .ah-list {
-    max-height: 190px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-  .ah-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 6px 8px;
-    background: var(--card2);
-    border-radius: 6px;
-  }
-  .ah-time { font-size: 11px; color: var(--muted); white-space: nowrap; margin-top: 3px; min-width: 72px; }
-  .ah-flags { display: flex; flex-wrap: wrap; gap: 4px; }
-  .ah-empty { color: var(--muted); font-size: 12px; font-style: italic; }
+/* ── Camera panel ── */
+.cam-panel { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.cam-toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.cam-url-input {
+  flex: 1; background: var(--card2); border: 1px solid var(--border2); border-radius: 8px;
+  color: var(--text); font-size: 12px; padding: 7px 12px; font-family: 'SF Mono','Fira Code',monospace;
+  outline: none;
+}
+.cam-url-input:focus { border-color: var(--accent); }
+.cam-url-input::placeholder { color: var(--muted); }
+.cam-connect-btn {
+  background: var(--accent); color: #000; border: none; border-radius: 8px;
+  padding: 7px 16px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.cam-connect-btn.active { background: var(--danger); color: #fff; }
+.cam-body { position: relative; background: #000; min-height: 240px; display: flex; align-items: center; justify-content: center; }
+.cam-stream { width: 100%; max-height: 480px; object-fit: contain; display: none; }
+.cam-placeholder { color: var(--muted); font-size: 13px; text-align: center; padding: 40px; }
+.cam-err { color: var(--danger); font-size: 12px; padding: 4px 16px 12px; display: none; }
+
+/* section headers */
+.section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); white-space: nowrap; }
+.section-count { font-size: 10px; color: var(--muted); background: var(--card2); border: 1px solid var(--border); padding: 2px 8px; border-radius: 10px; }
+.section-line { flex: 1; height: 1px; background: var(--border); }
+
+/* metric cards */
+#cards-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+
+.sensor-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 16px; transition: border-color 0.3s, box-shadow 0.3s;
+  position: relative; overflow: hidden; animation: cardin 0.3s ease;
+}
+@keyframes cardin { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+.sensor-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--card-color, var(--accent)); opacity: 0.8;
+}
+.sensor-card.alert {
+  border-color: rgba(248,81,73,0.5);
+  box-shadow: 0 0 18px rgba(248,81,73,0.12), inset 0 0 20px rgba(248,81,73,0.04);
+}
+.card-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; margin-bottom: 10px; }
+.card-value { font-size: 26px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.card-unit  { font-size: 12px; color: var(--muted); margin-left: 2px; font-weight: 400; }
+.card-sub   { font-size: 10px; color: var(--muted); margin-top: 6px; }
+
+/* boolean sensors */
+#bools-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.bool-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+  transition: border-color 0.3s, box-shadow 0.3s; min-width: 160px;
+  animation: cardin 0.3s ease;
+}
+.bool-card.active { border-color: rgba(248,81,73,0.5); background: rgba(248,81,73,0.05); box-shadow: 0 0 14px rgba(248,81,73,0.1); }
+.bool-icon { font-size: 22px; }
+.bool-name { font-size: 13px; font-weight: 600; }
+.bool-state { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.bool-card.active .bool-state { color: var(--danger); }
+
+/* imu */
+.imu-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.imu-card h3 { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; margin-bottom: 12px; }
+.imu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.imu-group h4 { font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+.imu-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+.imu-axis { color: var(--muted); }
+.imu-val  { font-variant-numeric: tabular-nums; font-weight: 500; }
+
+/* content grid */
+.content-grid { display: grid; grid-template-columns: 1fr 360px; gap: 14px; align-items: start; }
+@media (max-width: 1100px) { .content-grid { grid-template-columns: 1fr; } }
+
+/* charts */
+#charts-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; animation: cardin 0.3s ease; }
+.chart-card h3 { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; margin-bottom: 10px; }
+.chart-wrap { position: relative; height: 140px; }
+
+/* right column */
+.right-col { display: flex; flex-direction: column; gap: 10px; }
+
+/* ai panel */
+.ai-panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.ai-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.ai-header h3 { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+#analyze-btn {
+  margin-left: auto; background: none; border: 1px solid var(--accent);
+  color: var(--accent); padding: 4px 10px; border-radius: 6px; font-size: 11px;
+  cursor: pointer; transition: background 0.2s; font-family: inherit;
+}
+#analyze-btn:hover { background: rgba(88,166,255,0.1); }
+#analyze-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+#ai-text { font-size: 12px; line-height: 1.65; color: var(--text); min-height: 44px; }
+#ai-text.empty { color: var(--muted); font-style: italic; }
+.ai-ts { font-size: 10px; color: var(--muted); margin-top: 8px; }
+.thinking { display: flex; gap: 4px; align-items: center; }
+.thinking span { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: think 1.2s infinite ease-in-out; }
+.thinking span:nth-child(2) { animation-delay: 0.2s; }
+.thinking span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes think { 0%,80%,100%{transform:scale(0.6);opacity:.4} 40%{transform:scale(1);opacity:1} }
+
+/* chat */
+.chat-panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; height: 320px; }
+.chat-hdr { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.chat-hdr h3 { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+.chat-dot { margin-left: auto; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+.chat-dot.ready { background: var(--success); box-shadow: 0 0 5px var(--success); }
+.chat-msgs { flex: 1; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+.chat-msgs::-webkit-scrollbar { width: 4px; }
+.chat-msgs::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+.chat-msg { max-width: 88%; padding: 8px 11px; border-radius: 10px; font-size: 12px; line-height: 1.55; animation: cardin 0.2s ease; }
+.chat-msg.user { align-self: flex-end; background: rgba(88,166,255,0.15); border: 1px solid rgba(88,166,255,0.25); color: var(--text); border-bottom-right-radius: 3px; }
+.chat-msg.ai   { align-self: flex-start; background: var(--card2); border: 1px solid var(--border); color: var(--text); border-bottom-left-radius: 3px; }
+.chat-msg.error { align-self: flex-start; color: var(--danger); font-style: italic; }
+.chat-msg ul { margin: 4px 0 4px 14px; padding: 0; }
+.chat-msg li { margin-bottom: 3px; }
+.chat-msg strong { color: #fff; }
+.chat-msg em { color: var(--accent); font-style: normal; }
+.typing-indicator { display: flex; gap: 4px; align-items: center; padding: 12px 14px; }
+.typing-indicator span {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--muted); display: inline-block;
+  animation: typingbounce 1.4s infinite ease-in-out;
+}
+.typing-indicator span:nth-child(1) { animation-delay: 0s; }
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typingbounce {
+  0%,60%,100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-5px); opacity: 1; }
+}
+.chat-empty { font-size: 12px; color: var(--muted); font-style: italic; text-align: center; margin: auto; }
+.chat-input-row { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--border); flex-shrink: 0; }
+#chat-input { flex: 1; background: var(--card2); border: 1px solid var(--border); border-radius: 7px; padding: 8px 11px; font-size: 12px; color: var(--text); outline: none; font-family: inherit; transition: border-color 0.2s; }
+#chat-input::placeholder { color: #3a4055; }
+#chat-input:focus { border-color: var(--accent); }
+#chat-send { background: var(--accent); color: #080d18; border: none; border-radius: 7px; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: opacity 0.2s; flex-shrink: 0; }
+#chat-send:hover { opacity: 0.85; }
+#chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* history */
+.history-section { display: flex; flex-direction: column; gap: 10px; }
+.range-btns { display: flex; gap: 4px; }
+.range-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 4px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.2s, border-color 0.2s, color 0.2s; }
+.range-btn.active { background: rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.4); color: var(--accent); }
+#hist-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.hist-empty { font-size: 12px; color: var(--muted); font-style: italic; text-align: center; padding: 20px; }
+.hist-wrap { position: relative; height: 160px; }
+
+/* alert history */
+.ah-panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.ah-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.ah-header h3 { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+#ah-count { font-size: 10px; }
+#ah-clear { margin-left: auto; background: none; border: 1px solid var(--border); color: var(--muted); padding: 3px 9px; border-radius: 6px; font-size: 10px; cursor: pointer; transition: border-color 0.2s, color 0.2s; font-family: inherit; }
+#ah-clear:hover { border-color: var(--danger); color: var(--danger); }
+.ah-list { max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.ah-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; background: var(--card2); border-radius: 7px; }
+.ah-time { font-size: 10px; color: var(--muted); white-space: nowrap; margin-top: 2px; min-width: 68px; }
+.ah-flags { display: flex; flex-wrap: wrap; gap: 3px; }
+.ah-empty { color: var(--muted); font-size: 12px; font-style: italic; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
 </style>
 </head>
 <body>
 
 <header>
+  <a href="/" class="header-brand">
+    <div class="header-icon">⬡</div>
+    <span class="header-title">SensorMonitor</span>
+  </a>
   <span id="status-dot" class="dot"></span>
-  <h1>Multi-Sensor Monitor</h1>
   <span id="mode-badge" class="badge badge-off">Connecting…</span>
-  <span class="ml-auto" id="last-update"></span>
+  <div class="header-right ml-auto">
+    <div id="port-chip" class="port-chip" style="display:none">
+      <span class="port-chip-dot"></span>
+      <span id="port-chip-name"></span>
+      <button class="port-disconnect" title="Disconnect" onclick="disconnectPort()">×</button>
+    </div>
+    <span id="last-update"></span>
+    {% if user_email %}
+    <div class="user-chip">
+      <div class="user-avatar">{{ user_email[0].upper() }}</div>
+      {{ user_email }}
+    </div>
+    {% endif %}
+    <a href="/settings" class="settings-link" title="Settings">⚙</a>
+    {% if user_email %}
+    <a href="/logout"><button class="logout-btn">Sign out</button></a>
+    {% endif %}
+  </div>
 </header>
 
 <div id="alert-bar" class="hidden">
   <div id="alert-bar-inner">
-    <span class="alert-label">&#9888; Active Alerts</span>
+    <span class="alert-label">⚠ Active Alerts</span>
     <div id="flags-container"></div>
   </div>
 </div>
 
-<main>
-  <!-- Metric cards -->
-  <div class="cards-row">
-    <div class="card" id="card-temp">
-      <div class="card-label">Temperature</div>
-      <div class="card-value c-red">—<span class="card-unit">°C</span></div>
-      <div class="card-sub">Threshold: 32 °C</div>
+<!-- Waiting for first data -->
+<div id="waiting">
+  <div class="radar">
+    <div class="radar-ring r1"></div>
+    <div class="radar-ring r2"></div>
+    <div class="radar-ring r3"></div>
+    <div class="radar-center">⬡</div>
+  </div>
+
+  <h2 class="waiting-title">Connect your device</h2>
+  <p class="waiting-sub">Plug in any microcontroller, select its port, and hit Connect. The dashboard builds itself from whatever JSON your board sends.</p>
+
+  <div class="port-selector">
+    <div class="port-row">
+      <div class="port-select-wrap">
+        <select id="port-select">
+          <option value="">Scanning for devices…</option>
+        </select>
+      </div>
+      <div class="baud-wrap">
+        <select id="baud-select" class="baud-select">
+          <option value="9600">9600</option>
+          <option value="19200">19200</option>
+          <option value="38400">38400</option>
+          <option value="57600">57600</option>
+          <option value="115200" selected>115200</option>
+          <option value="230400">230400</option>
+          <option value="250000">250000</option>
+        </select>
+      </div>
+      <button class="port-refresh-btn" onclick="scanPorts()" title="Refresh ports">↻</button>
+      <button class="port-connect-btn" id="connect-btn" onclick="connectPort()">Connect</button>
     </div>
-    <div class="card" id="card-humidity">
-      <div class="card-label">Humidity</div>
-      <div class="card-value c-blue">—<span class="card-unit">%</span></div>
-      <div class="card-sub">Threshold: 75 %</div>
+    <p class="port-status-msg" id="port-status-msg">Plug in your board and select its port above.</p>
+    <p class="port-status-msg" style="margin-top:4px">WiFi board? POST JSON to <code style="color:#7dd3fc;font-size:11px">/api/ingest</code> — no USB needed.</p>
+  </div>
+
+</div>
+
+<main id="main-content" style="display:none">
+
+  <!-- Metric cards (auto-populated) -->
+  <div>
+    <div class="section-header">
+      <span class="section-title">Live Readings</span>
+      <span class="section-count" id="sensor-count"></span>
+      <div class="section-line"></div>
     </div>
-    <div class="card" id="card-gas">
-      <div class="card-label">Gas (MQ-2)</div>
-      <div class="card-value c-amber">—<span class="card-unit">ADC</span></div>
-      <div class="card-sub">Threshold: 400</div>
+    <div id="cards-row"></div>
+  </div>
+
+  <!-- Boolean sensors (shown only if present) -->
+  <div id="bools-section" style="display:none">
+    <div class="section-header">
+      <span class="section-title">Digital Sensors</span>
+      <div class="section-line"></div>
     </div>
-    <div class="card" id="card-alcohol">
-      <div class="card-label">Alcohol (MQ-3)</div>
-      <div class="card-value c-purple">—<span class="card-unit">ADC</span></div>
-      <div class="card-sub">Threshold: 250</div>
+    <div id="bools-row"></div>
+  </div>
+
+  <!-- IMU section (shown only if accel/gyro present) -->
+  <div id="imu-section" style="display:none">
+    <div class="section-header">
+      <span class="section-title">IMU</span>
+      <div class="section-line"></div>
     </div>
-    <div class="card" id="card-light">
-      <div class="card-label">Light (LDR)</div>
-      <div class="card-value c-yellow">—<span class="card-unit">/1023</span></div>
-      <div class="card-sub" id="card-light-pct"></div>
-    </div>
-    <div class="card" id="card-distance">
-      <div class="card-label">Distance</div>
-      <div class="card-value c-green">—<span class="card-unit">cm</span></div>
-      <div class="card-sub">Threshold: &lt; 10 cm</div>
+    <div class="imu-card">
+      <div class="imu-grid" id="imu-grid"></div>
     </div>
   </div>
 
-  <!-- Charts -->
-  <div class="charts-grid">
-    <div class="chart-card">
-      <h3>Temperature &amp; Humidity</h3>
-      <div class="chart-wrap"><canvas id="chartTH"></canvas></div>
+  <!-- ESP32-CAM stream -->
+  <div>
+    <div class="section-header">
+      <span class="section-title">Camera</span>
+      <div class="section-line"></div>
     </div>
-    <div class="chart-card">
-      <h3>Gas &amp; Alcohol Levels</h3>
-      <div class="chart-wrap"><canvas id="chartGA"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <h3>Light Level</h3>
-      <div class="chart-wrap"><canvas id="chartLight"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <h3>Distance</h3>
-      <div class="chart-wrap"><canvas id="chartDist"></canvas></div>
+    <div class="cam-panel">
+      <div class="cam-toolbar">
+        <input class="cam-url-input" id="cam-url" type="text" placeholder="http://192.168.x.x:81/stream" spellcheck="false">
+        <button class="cam-connect-btn" id="cam-btn" onclick="toggleCamera()">Connect</button>
+      </div>
+      <div class="cam-body">
+        <img class="cam-stream" id="cam-stream" alt="camera stream">
+        <div class="cam-placeholder" id="cam-placeholder">Enter your ESP32-CAM stream URL above and click Connect</div>
+      </div>
+      <div class="cam-err" id="cam-err">Could not load stream — check the URL and that the ESP32-CAM is on the same network.</div>
     </div>
   </div>
 
-  <!-- Alert History -->
+  <!-- Live charts + AI -->
+  <div class="content-grid">
+    <div>
+      <div class="section-header">
+        <span class="section-title">Live Stream</span>
+        <div class="section-line"></div>
+      </div>
+      <div id="charts-container"></div>
+    </div>
+    <div class="right-col">
+      <div class="section-header">
+        <span class="section-title">AI Assistant</span>
+        <div class="section-line"></div>
+      </div>
+      <div class="ai-panel">
+        <div class="ai-header">
+          <h3>Groq Analysis</h3>
+          <button id="analyze-btn">Analyze Now</button>
+        </div>
+        <div id="ai-text" class="empty">Analysis will appear here when alerts are detected…</div>
+        <div class="ai-ts" id="ai-ts"></div>
+      </div>
+      <div class="chat-panel">
+        <div class="chat-hdr">
+          <h3>AI Chat</h3>
+          <div class="chat-dot" id="chat-dot"></div>
+        </div>
+        <div class="chat-msgs" id="chat-msgs">
+          <span class="chat-empty">Ask me anything about your sensor data…</span>
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="chat-input" placeholder="Ask about your sensors…" autocomplete="off">
+          <button id="chat-send">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Historical data -->
+  <div class="history-section">
+    <div class="section-header">
+      <span class="section-title">Historical Data</span>
+      <div class="range-btns">
+        <button class="range-btn active" data-range="1h">1H</button>
+        <button class="range-btn" data-range="24h">24H</button>
+        <button class="range-btn" data-range="7d">7D</button>
+        <button class="range-btn" data-range="30d">30D</button>
+      </div>
+      <div class="section-line"></div>
+    </div>
+    <div id="hist-container"><p class="hist-empty">No historical data yet.</p></div>
+  </div>
+
+  <!-- Alert history -->
   <div class="ah-panel">
     <div class="ah-header">
       <h3>Alert History</h3>
@@ -383,336 +576,416 @@
     </div>
   </div>
 
-  <!-- Bottom row: booleans | IMU | Chat -->
-  <div class="bottom-row">
-
-    <div class="bool-grid">
-      <div class="bool-card" id="bool-vib">
-        <div class="bool-icon">📳</div>
-        <div>
-          <div class="bool-name">Vibration</div>
-          <div class="bool-state">No vibration</div>
-        </div>
-      </div>
-      <div class="bool-card" id="bool-ir">
-        <div class="bool-icon">🔴</div>
-        <div>
-          <div class="bool-name">IR Obstacle</div>
-          <div class="bool-state">Path clear</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="imu-card">
-      <h3>IMU — MPU-6050</h3>
-      <div class="imu-grid">
-        <div class="imu-group">
-          <h4>Accelerometer (g)</h4>
-          <div class="imu-row"><span class="imu-axis">X</span><span class="imu-val" id="ax">—</span></div>
-          <div class="imu-row"><span class="imu-axis">Y</span><span class="imu-val" id="ay">—</span></div>
-          <div class="imu-row"><span class="imu-axis">Z</span><span class="imu-val" id="az">—</span></div>
-        </div>
-        <div class="imu-group">
-          <h4>Gyroscope (°/s)</h4>
-          <div class="imu-row"><span class="imu-axis">X</span><span class="imu-val" id="gx">—</span></div>
-          <div class="imu-row"><span class="imu-axis">Y</span><span class="imu-val" id="gy">—</span></div>
-          <div class="imu-row"><span class="imu-axis">Z</span><span class="imu-val" id="gz">—</span></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="chat-panel">
-      <div class="chat-header">
-        <span class="chat-icon">💬</span>
-        <h3>Sensor Q&A</h3>
-      </div>
-      <div id="chat-messages" class="chat-messages">
-        <div class="chat-welcome">Ask questions about your sensor data…</div>
-      </div>
-      <div class="chat-input-wrapper">
-        <input type="text" id="chat-input" placeholder="What's happening with the temperature?" class="chat-input">
-        <button id="chat-send" class="chat-send" title="Send">↑</button>
-      </div>
-    </div>
-
-  </div>
 </main>
 
 <script>
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
 const socket = io();
 const N = 60;
 let lastSensorData = null;
 let groqEnabled = false;
 let alertHistory = [];
-let chatMessages = [];
+let initialized = false;
 
-/* ── helpers ── */
-function makeLabels() { return Array(N).fill(''); }
-function makeData()   { return Array(N).fill(null); }
-function push(arr, val) { arr.push(val); arr.shift(); }
+const PRETTY = {
+  temp:'Temperature', temperature:'Temperature', tmp:'Temperature',
+  humidity:'Humidity', hum:'Humidity',
+  gas:'Gas', mq2:'Gas (MQ-2)',
+  alcohol:'Alcohol', mq3:'Alcohol (MQ-3)',
+  light:'Light', ldr:'Light',
+  distance:'Distance', dist:'Distance',
+  pressure:'Pressure', pres:'Pressure',
+  ph:'pH Level',
+  rpm:'Motor RPM',
+  current:'Current', amps:'Current',
+  voltage:'Voltage', volts:'Voltage',
+  co2:'CO₂', co:'CO',
+  flow:'Flow Rate',
+  speed:'Speed',
+  altitude:'Altitude',
+  uv:'UV Index',
+  noise:'Noise Level',
+  soil:'Soil Moisture',
+  accel_x:'Accel X', accel_y:'Accel Y', accel_z:'Accel Z',
+  gyro_x:'Gyro X', gyro_y:'Gyro Y', gyro_z:'Gyro Z',
+  mag_x:'Mag X', mag_y:'Mag Y', mag_z:'Mag Z',
+};
 
-function makeChart(id, datasets, yMin, yMax) {
-  return new Chart(document.getElementById(id), {
+const UNITS = {
+  temp:'°C', temperature:'°C', tmp:'°C',
+  humidity:'%', hum:'%',
+  distance:'cm', dist:'cm',
+  pressure:'hPa', pres:'hPa',
+  ph:'pH', rpm:'RPM',
+  current:'A', amps:'A',
+  voltage:'V', volts:'V',
+  co2:'ppm', co:'ppm',
+  flow:'L/m', speed:'m/s',
+  altitude:'m', uv:'index',
+  noise:'dB', soil:'%',
+  accel_x:'g', accel_y:'g', accel_z:'g',
+  gyro_x:'°/s', gyro_y:'°/s', gyro_z:'°/s',
+};
+
+const COLOR_PALETTE = [
+  '#f87171','#60a5fa','#fbbf24','#c084fc','#facc15','#4ade80',
+  '#fb923c','#34d399','#a78bfa','#f472b6','#22d3ee','#a3e635',
+  '#e879f9','#2dd4bf','#f97316','#818cf8',
+];
+
+const IMU_KEYS = new Set(['accel_x','accel_y','accel_z','gyro_x','gyro_y','gyro_z','mag_x','mag_y','mag_z']);
+const SKIP_KEYS = new Set(['flags','simulated','ts','id']);
+
+// State
+const numericSensors = new Map(); // key → { cardEl, chart, data[] }
+const boolSensors    = new Map(); // key → { cardEl }
+const imuValues      = new Map(); // key → valueEl
+const histCharts     = new Map();
+let colorIdx = 0;
+
+function nextColor() { return COLOR_PALETTE[colorIdx++ % COLOR_PALETTE.length]; }
+
+function prettyName(key) {
+  return PRETTY[key] || key.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+function unit(key) { return UNITS[key] || ''; }
+
+function fmt(val) {
+  if (val === null || val === undefined) return 'N/A';
+  if (typeof val === 'number') return Number.isInteger(val) ? val : val.toFixed(Math.abs(val) < 10 ? 3 : 1);
+  return val;
+}
+
+function initSensors(data) {
+  document.getElementById('waiting').style.display = 'none';
+  document.getElementById('main-content').style.display = 'flex';
+
+  const numericKeys = [];
+  const boolKeys    = [];
+  const imuKeys     = [];
+
+  for (const [key, val] of Object.entries(data)) {
+    if (SKIP_KEYS.has(key)) continue;
+    if (IMU_KEYS.has(key))      { imuKeys.push(key); continue; }
+    if (typeof val === 'boolean') { boolKeys.push(key); continue; }
+    if (typeof val === 'number')  { numericKeys.push(key); }
+  }
+
+  numericKeys.forEach(createNumericSensor);
+  boolKeys.forEach(createBoolSensor);
+  if (imuKeys.length) initIMU(imuKeys);
+
+  document.getElementById('sensor-count').textContent =
+    `${numericKeys.length + boolKeys.length + imuKeys.length} sensors`;
+
+  initialized = true;
+}
+
+function createNumericSensor(key) {
+  const color = nextColor();
+
+  // Card
+  const card = document.createElement('div');
+  card.className = 'sensor-card';
+  card.id = `card-${key}`;
+  card.style.setProperty('--card-color', color);
+  card.innerHTML = `
+    <div class="card-label">${prettyName(key)}</div>
+    <div class="card-value" style="color:${color}">—<span class="card-unit">${unit(key)}</span></div>
+    <div class="card-sub" id="sub-${key}"></div>`;
+  document.getElementById('cards-row').appendChild(card);
+
+  // Chart
+  const chartCard = document.createElement('div');
+  chartCard.className = 'chart-card';
+  chartCard.id = `chart-card-${key}`;
+  chartCard.innerHTML = `<h3>${prettyName(key)}${unit(key) ? ' (' + unit(key) + ')' : ''}</h3><div class="chart-wrap"><canvas id="canvas-${key}"></canvas></div>`;
+  document.getElementById('charts-container').appendChild(chartCard);
+
+  const data = Array(N).fill(null);
+  const chart = new Chart(document.getElementById(`canvas-${key}`), {
     type: 'line',
-    data: { labels: makeLabels(), datasets },
+    data: {
+      labels: Array(N).fill(''),
+      datasets: [{
+        data, borderColor: color,
+        backgroundColor: color.replace('rgb','rgba').replace(')',',0.07)'),
+        borderWidth: 1.5, pointRadius: 0, tension: 0.4, fill: true,
+      }]
+    },
     options: {
-      animation: false,
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: {
-          labels: { color: '#8b949e', boxWidth: 12, font: { size: 11 } }
-        }
-      },
+      animation: false, responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
       scales: {
         x: { display: false },
-        y: {
-          min: yMin, max: yMax,
-          grid: { color: 'rgba(48,54,61,0.6)' },
-          ticks: { color: '#8b949e', font: { size: 10 }, maxTicksLimit: 5 }
-        }
+        y: { grid: { color:'rgba(30,38,56,0.8)' }, ticks: { color:'#677590', font:{ size:9 }, maxTicksLimit:4 } }
       }
     }
   });
+
+  numericSensors.set(key, { card, chart, data });
 }
 
-function ds(label, color, data) {
-  return {
-    label, data: data || makeData(),
-    borderColor: color,
-    backgroundColor: color.replace(')', ', 0.08)').replace('rgb', 'rgba'),
-    borderWidth: 1.5,
-    pointRadius: 0,
-    tension: 0.4,
-    fill: true,
-  };
+function createBoolSensor(key) {
+  document.getElementById('bools-section').style.display = 'block';
+  const card = document.createElement('div');
+  card.className = 'bool-card';
+  card.id = `bool-${key}`;
+  card.innerHTML = `
+    <div class="bool-icon">⬤</div>
+    <div>
+      <div class="bool-name">${prettyName(key)}</div>
+      <div class="bool-state">Inactive</div>
+    </div>`;
+  document.getElementById('bools-row').appendChild(card);
+  boolSensors.set(key, { card });
 }
 
-function dsThreshold(label, color, value) {
-  return {
-    label, data: Array(N).fill(value),
-    borderColor: color,
-    borderWidth: 1,
-    borderDash: [4, 4],
-    pointRadius: 0,
-    fill: false,
-    tension: 0,
-  };
+function initIMU(keys) {
+  document.getElementById('imu-section').style.display = 'block';
+  const grid = document.getElementById('imu-grid');
+
+  // Group by prefix (accel, gyro, mag)
+  const groups = {};
+  keys.forEach(k => {
+    const prefix = k.split('_')[0];
+    if (!groups[prefix]) groups[prefix] = [];
+    groups[prefix].push(k);
+  });
+
+  for (const [prefix, ks] of Object.entries(groups)) {
+    const div = document.createElement('div');
+    div.className = 'imu-group';
+    div.innerHTML = `<h4>${prettyName(prefix)}</h4>` +
+      ks.map(k => `<div class="imu-row"><span class="imu-axis">${k.split('_')[1]?.toUpperCase() || k}</span><span class="imu-val" id="imu-${k}">—</span></div>`).join('');
+    grid.appendChild(div);
+    ks.forEach(k => imuValues.set(k, document.getElementById(`imu-${k}`)));
+  }
 }
 
-/* ── charts ── */
-const chartTH = makeChart('chartTH', [
-  ds('Temp (°C)', 'rgb(248,81,73)'),
-  ds('Humidity (%)', 'rgb(88,166,255)'),
-  dsThreshold('Temp limit', 'rgba(248,81,73,0.4)', 32),
-  dsThreshold('Hum limit', 'rgba(88,166,255,0.4)', 75),
-], 0, 100);
+function update(sensor) {
+  if (!initialized) initSensors(sensor);
 
-const chartGA = makeChart('chartGA', [
-  ds('Gas (MQ-2)', 'rgb(227,179,65)'),
-  ds('Alcohol (MQ-3)', 'rgb(188,140,255)'),
-  dsThreshold('Gas limit', 'rgba(227,179,65,0.4)', 400),
-  dsThreshold('Alc limit', 'rgba(188,140,255,0.4)', 250),
-], 0, 600);
+  const flags = sensor.flags || [];
+  const fSet  = new Set(flags);
 
-const chartLight = makeChart('chartLight', [
-  ds('Light', 'rgb(210,153,34)'),
-], 0, 1023);
+  for (const [key, val] of Object.entries(sensor)) {
+    if (SKIP_KEYS.has(key)) continue;
 
-const chartDist = makeChart('chartDist', [
-  ds('Distance (cm)', 'rgb(63,185,80)'),
-  dsThreshold('Close limit', 'rgba(248,81,73,0.5)', 10),
-], 0, 120);
+    if (IMU_KEYS.has(key) && imuValues.has(key)) {
+      imuValues.get(key).textContent = val === null ? 'N/A' : typeof val === 'number' ? val.toFixed(3) : val;
+      continue;
+    }
 
-/* ── card helpers ── */
-function cardValue(id, val, unit) {
-  const el = document.getElementById(id);
-  el.querySelector('.card-value').innerHTML = `${val}<span class="card-unit">${unit}</span>`;
-}
+    if (typeof val === 'boolean' && boolSensors.has(key)) {
+      const { card } = boolSensors.get(key);
+      card.classList.toggle('active', val);
+      card.querySelector('.bool-state').textContent = val ? 'Active' : 'Inactive';
+      continue;
+    }
 
-function setAlert(cardId, active) {
-  document.getElementById(cardId).classList.toggle('alert', active);
-}
+    if (typeof val === 'number' && numericSensors.has(key)) {
+      const { card, chart, data } = numericSensors.get(key);
+      const u = unit(key);
+      card.querySelector('.card-value').innerHTML = `${fmt(val)}<span class="card-unit">${u}</span>`;
+      data.push(val); data.shift();
+      chart.update('none');
+    }
+  }
 
-/* ── boolean sensor ── */
-function setBool(id, active, trueLabel, falseLabel) {
-  const el = document.getElementById(id);
-  el.classList.toggle('active', active);
-  el.querySelector('.bool-state').textContent = active ? trueLabel : falseLabel;
-}
+  // Alert flags on cards
+  numericSensors.forEach((_, key) => {
+    const card = document.getElementById(`card-${key}`);
+    if (card) card.classList.toggle('alert', fSet.has(`HIGH_${key.toUpperCase()}`) || fSet.has(`LOW_${key.toUpperCase()}`));
+  });
 
-/* ── update everything ── */
-function update(sensor, simulated) {
-  const f = sensor.flags || [];
-  const fSet = new Set(f);
-
-  /* metric cards */
-  cardValue('card-temp',     sensor.temp.toFixed(1),     '°C');
-  cardValue('card-humidity', sensor.humidity.toFixed(1),  '%');
-  cardValue('card-gas',      sensor.gas,                 'ADC');
-  cardValue('card-alcohol',  sensor.alcohol,             'ADC');
-  cardValue('card-light',    sensor.light,               '/1023');
-  cardValue('card-distance', sensor.distance.toFixed(1), 'cm');
-  document.getElementById('card-light-pct').textContent =
-    `${((sensor.light / 1023) * 100).toFixed(0)} %`;
-
-  setAlert('card-temp',     fSet.has('HIGH_TEMP'));
-  setAlert('card-humidity', fSet.has('HIGH_HUMIDITY'));
-  setAlert('card-gas',      fSet.has('HIGH_GAS'));
-  setAlert('card-alcohol',  fSet.has('HIGH_ALCOHOL'));
-  setAlert('card-distance', fSet.has('CLOSE_OBJECT'));
-
-  /* charts — push latest values */
-  push(chartTH.data.datasets[0].data,    sensor.temp);
-  push(chartTH.data.datasets[1].data,    sensor.humidity);
-  push(chartGA.data.datasets[0].data,    sensor.gas);
-  push(chartGA.data.datasets[1].data,    sensor.alcohol);
-  push(chartLight.data.datasets[0].data, sensor.light);
-  push(chartDist.data.datasets[0].data,  sensor.distance);
-
-  chartTH.update();
-  chartGA.update();
-  chartLight.update();
-  chartDist.update();
-
-  /* booleans */
-  setBool('bool-vib', sensor.vibration,   'Vibration detected!', 'No vibration');
-  setBool('bool-ir',  sensor.ir_obstacle, 'Obstacle detected!',  'Path clear');
-
-  /* IMU */
-  document.getElementById('ax').textContent = sensor.accel_x.toFixed(3);
-  document.getElementById('ay').textContent = sensor.accel_y.toFixed(3);
-  document.getElementById('az').textContent = sensor.accel_z.toFixed(3);
-  document.getElementById('gx').textContent = sensor.gyro_x.toFixed(2);
-  document.getElementById('gy').textContent = sensor.gyro_y.toFixed(2);
-  document.getElementById('gz').textContent = sensor.gyro_z.toFixed(2);
-
-  /* flags bar */
+  // Alert bar
   const bar = document.getElementById('alert-bar');
   const fc  = document.getElementById('flags-container');
-  if (f.length) {
+  if (flags.length) {
     bar.classList.remove('hidden');
-    fc.innerHTML = f.map(fl => `<span class="flag-chip">${fl.replace(/_/g,' ')}</span>`).join('');
+    fc.innerHTML = flags.map(f => `<span class="flag-chip">${f.replace(/_/g,' ')}</span>`).join('');
   } else {
     bar.classList.add('hidden');
     fc.innerHTML = '';
   }
 
-  /* header */
-  const dot   = document.getElementById('status-dot');
+  // Header status
+  const dot = document.getElementById('status-dot');
   const badge = document.getElementById('mode-badge');
-  if (simulated) {
-    dot.className = 'dot sim';
-    badge.textContent = 'SIMULATION';
-    badge.className = 'badge badge-sim';
-  } else {
-    dot.className = 'dot live';
-    badge.textContent = 'LIVE';
-    badge.className = 'badge badge-live';
-  }
-
-  const now = new Date();
-  document.getElementById('last-update').textContent =
-    `Updated ${now.toLocaleTimeString()}`;
+  dot.className = 'dot live'; badge.textContent = 'LIVE'; badge.className = 'badge badge-live';
+  document.getElementById('last-update').textContent = `Updated ${new Date().toLocaleTimeString()}`;
 }
 
-/* ── AI panel ── */
 function showAnalysis(text) {
   const el = document.getElementById('ai-text');
-  el.className = '';
-  el.textContent = text;
-  document.getElementById('ai-ts').textContent =
-    `Last analysis: ${new Date().toLocaleTimeString()}`;
+  el.className = ''; el.textContent = text;
+  document.getElementById('ai-ts').textContent = `Last analysis: ${new Date().toLocaleTimeString()}`;
 }
-
 function showThinking() {
-  const el = document.getElementById('ai-text');
-  el.className = '';
-  el.innerHTML = '<div class="ai-thinking"><span></span><span></span><span></span></div>';
+  document.getElementById('ai-text').className = '';
+  document.getElementById('ai-text').innerHTML = '<div class="thinking"><span></span><span></span><span></span></div>';
 }
 
-/* ── alert history ── */
+document.getElementById('analyze-btn').addEventListener('click', () => {
+  if (!lastSensorData || !groqEnabled) return;
+  showThinking();
+  const btn = document.getElementById('analyze-btn');
+  btn.disabled = true; btn.textContent = 'Analyzing…';
+  socket.emit('request_analysis', lastSensorData);
+  setTimeout(() => { btn.disabled = false; btn.textContent = 'Analyze Now'; }, 32000);
+});
+
 function renderHistory() {
   const el = document.getElementById('ah-list');
-  const count = document.getElementById('ah-count');
+  const cnt = document.getElementById('ah-count');
   if (!alertHistory.length) {
     el.innerHTML = '<span class="ah-empty">No alerts recorded yet.</span>';
-    count.textContent = '0 events';
-    count.className = 'badge badge-off';
-    return;
+    cnt.textContent = '0 events'; cnt.className = 'badge badge-off'; return;
   }
-  count.textContent = `${alertHistory.length} event${alertHistory.length > 1 ? 's' : ''}`;
-  count.className = 'badge badge-sim';
+  cnt.textContent = `${alertHistory.length} event${alertHistory.length > 1 ? 's' : ''}`;
+  cnt.className = 'badge badge-sim';
   el.innerHTML = alertHistory.slice().reverse().map(e => {
-    const d = new Date(e.ts * 1000);
     const chips = e.flags.map(f => `<span class="flag-chip">${f.replace(/_/g,' ')}</span>`).join('');
-    return `<div class="ah-row"><span class="ah-time">${d.toLocaleTimeString()}</span><div class="ah-flags">${chips}</div></div>`;
+    return `<div class="ah-row"><span class="ah-time">${new Date(e.ts*1000).toLocaleTimeString()}</span><div class="ah-flags">${chips}</div></div>`;
   }).join('');
 }
+document.getElementById('ah-clear').addEventListener('click', () => { alertHistory = []; renderHistory(); });
 
-document.getElementById('ah-clear').addEventListener('click', () => {
-  alertHistory = [];
-  renderHistory();
-});
+let chatHasMessages = false;
+function renderMarkdown(text) {
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^[•\-]\s+(.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+    .replace(/\n/g, '<br>');
+}
 
-/* ── chat helpers ── */
-function renderChat() {
-  const el = document.getElementById('chat-messages');
-  if (!chatMessages.length) {
-    el.innerHTML = '<div class="chat-welcome">Ask questions about your sensor data…</div>';
-    return;
+function addChat(text, type) {
+  const container = document.getElementById('chat-msgs');
+  if (!chatHasMessages) { container.innerHTML = ''; chatHasMessages = true; }
+  const el = document.createElement('div');
+  el.className = `chat-msg ${type}`;
+  if (type === 'ai') {
+    el.innerHTML = renderMarkdown(text);
+  } else {
+    el.textContent = text;
   }
-  el.innerHTML = chatMessages.map(msg => {
-    const d = new Date(msg.ts * 1000);
-    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return `<div class="chat-message ${msg.role}"><strong>${time}:</strong> ${msg.content}</div>`;
-  }).join('');
-  el.scrollTop = el.scrollHeight;
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+function showTyping() {
+  const container = document.getElementById('chat-msgs');
+  if (!chatHasMessages) { container.innerHTML = ''; chatHasMessages = true; }
+  const el = document.createElement('div');
+  el.className = 'chat-msg ai typing-indicator';
+  el.id = 'typing-bubble';
+  el.innerHTML = '<span></span><span></span><span></span>';
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+function removeTyping() {
+  document.getElementById('typing-bubble')?.remove();
 }
 
-function addChatMessage(content, role) {
-  chatMessages.push({ content, role, ts: Date.now() / 1000 });
-  if (chatMessages.length > 50) chatMessages.shift();
-  renderChat();
-}
-
-document.getElementById('chat-send').addEventListener('click', () => {
+function sendChat() {
   const input = document.getElementById('chat-input');
   const msg = input.value.trim();
-  if (!msg || !groqEnabled) return;
-  addChatMessage(msg, 'user');
+  if (!msg) return;
   input.value = '';
   socket.emit('chat_message', { message: msg });
+  document.getElementById('chat-send').disabled = true;
+  showTyping();
+}
+document.getElementById('chat-send').addEventListener('click', sendChat);
+document.getElementById('chat-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
 });
 
-document.getElementById('chat-input').addEventListener('keypress', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    document.getElementById('chat-send').click();
+let currentRange = '1h';
+async function loadHistory(range) {
+  currentRange = range;
+  document.querySelectorAll('.range-btn').forEach(b => b.classList.toggle('active', b.dataset.range === range));
+  histCharts.forEach(c => c.destroy());
+  histCharts.clear();
+
+  const res = await fetch(`/api/history?range=${range}`);
+  const rows = await res.json();
+  const container = document.getElementById('hist-container');
+
+  if (!rows.length) {
+    container.innerHTML = '<p class="hist-empty">No data for this range yet.</p>'; return;
   }
-});
 
-/* ── socket events ── */
-socket.on('connect', () => {
-  document.getElementById('status-dot').className = 'dot live';
-});
+  // Discover numeric keys from rows
+  const keys = new Set();
+  rows.forEach(r => Object.entries(r).forEach(([k,v]) => {
+    if (!SKIP_KEYS.has(k) && !IMU_KEYS.has(k) && typeof v === 'number') keys.add(k);
+  }));
 
-socket.on('config', ({ groq_available, alert_history, chat_history }) => {
+  container.innerHTML = '';
+  const labels = rows.map(r => new Date(r.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));
+
+  const hOpts = {
+    animation: false, responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color:'#677590', boxWidth:10, font:{ size:10 } } } },
+    scales: {
+      x: { display:true, ticks:{ color:'#677590', font:{ size:9 }, maxTicksLimit:8, maxRotation:0 }, grid:{ color:'rgba(30,38,56,0.5)' } },
+      y: { grid:{ color:'rgba(30,38,56,0.8)' }, ticks:{ color:'#677590', font:{ size:9 }, maxTicksLimit:4 } }
+    }
+  };
+
+  // Group into pairs for cleaner layout
+  const keyArr = [...keys];
+  for (let i = 0; i < keyArr.length; i += 2) {
+    const group = keyArr.slice(i, i+2);
+    const card = document.createElement('div');
+    card.className = 'chart-card';
+    card.innerHTML = `<h3>${group.map(prettyName).join(' &amp; ')}</h3><div class="hist-wrap"><canvas id="hchart-${i}"></canvas></div>`;
+    container.appendChild(card);
+
+    const datasets = group.map(k => {
+      const color = numericSensors.get(k) ? getComputedStyle(document.getElementById(`card-${k}`)).getPropertyValue('--card-color').trim() : nextColor();
+      return {
+        label: prettyName(k), data: rows.map(r => r[k] ?? null),
+        borderColor: color,
+        backgroundColor: color.replace('rgb','rgba').replace(')',',0.06)'),
+        borderWidth: 1.5, pointRadius: rows.length < 100 ? 2 : 0, tension: 0.3, fill: true,
+      };
+    });
+
+    const chart = new Chart(document.getElementById(`hchart-${i}`), {
+      type: 'line', data: { labels, datasets }, options: hOpts
+    });
+    histCharts.set(i, chart);
+  }
+}
+
+document.querySelectorAll('.range-btn').forEach(b => b.addEventListener('click', () => loadHistory(b.dataset.range)));
+loadHistory('1h');
+scanPorts();
+
+socket.on('connect', () => { document.getElementById('status-dot').className = 'dot live'; });
+
+socket.on('config', ({ groq_available, alert_history, chat_history, connected_port, default_baud }) => {
+  if (connected_port) setPortChip(connected_port);
+  if (default_baud) {
+    const baudSel = document.getElementById('baud-select');
+    if (baudSel && [...baudSel.options].some(o => o.value == default_baud)) baudSel.value = default_baud;
+  }
   groqEnabled = groq_available;
-  if (alert_history && alert_history.length) {
-    alertHistory = alert_history;
-    renderHistory();
-  }
-  if (chat_history && chat_history.length) {
-    chatMessages = chat_history;
-    renderChat();
-  }
   if (!groq_available) {
-    document.getElementById('chat-input').placeholder = 'AI chat not available';
-    document.getElementById('chat-input').disabled = true;
+    document.getElementById('analyze-btn').style.display = 'none';
     document.getElementById('chat-send').disabled = true;
+    document.getElementById('chat-input').placeholder = 'Groq API not configured';
+    document.getElementById('chat-input').disabled = true;
+  } else {
+    document.getElementById('chat-dot').classList.add('ready');
   }
+  if (alert_history?.length) { alertHistory = alert_history; renderHistory(); }
+  if (chat_history?.length) chat_history.forEach(m => addChat(m.content, m.role === 'user' ? 'user' : 'ai'));
 });
 
 socket.on('new_alert', entry => {
@@ -727,43 +1000,161 @@ socket.on('disconnect', () => {
   document.getElementById('mode-badge').className = 'badge badge-off';
 });
 
-socket.on('sensor_data', ({ sensor, simulated, groq_analysis }) => {
+socket.on('sensor_data', ({ sensor, groq_analysis }) => {
   lastSensorData = sensor;
-  update(sensor, simulated);
+  update(sensor);
   if (groq_analysis) showAnalysis(groq_analysis);
 });
 
 socket.on('groq_analysis', ({ text }) => {
   showAnalysis(text);
-  document.getElementById('analyze-btn').disabled = false;
-  document.getElementById('analyze-btn').textContent = 'Analyze Now';
+  const btn = document.getElementById('analyze-btn');
+  btn.disabled = false; btn.textContent = 'Analyze Now';
 });
 
+socket.on('chat_message_received', ({ message }) => addChat(message, 'user'));
 socket.on('chat_response', ({ message, error }) => {
-  if (error) {
-    addChatMessage(`Error: ${error}`, 'assistant');
-  } else if (message) {
-    addChatMessage(message, 'assistant');
+  removeTyping();
+  addChat(error || message, error ? 'error' : 'ai');
+  document.getElementById('chat-send').disabled = false;
+});
+
+async function scanPorts() {
+  const sel = document.getElementById('port-select');
+  sel.innerHTML = '<option value="">Scanning…</option>';
+  document.getElementById('port-status-msg').textContent = 'Scanning for devices…';
+  document.getElementById('port-status-msg').className = 'port-status-msg';
+
+  try {
+    const res = await fetch('/api/ports');
+    const { ports, connected } = await res.json();
+
+    if (connected) {
+      setPortChip(connected);
+    }
+
+    if (!ports.length) {
+      sel.innerHTML = '<option value="">No devices found</option>';
+      document.getElementById('port-status-msg').textContent = 'No devices found — check your USB connection and click ↻';
+      document.getElementById('port-status-msg').className = 'port-status-msg error';
+      return;
+    }
+
+    sel.innerHTML = '<option value="">Select a port…</option>' +
+      ports.map(p => `<option value="${p.port}">${p.port} — ${p.description}</option>`).join('');
+    document.getElementById('port-status-msg').textContent = `${ports.length} device${ports.length > 1 ? 's' : ''} found. Select a port and click Connect.`;
+  } catch {
+    sel.innerHTML = '<option value="">Error scanning ports</option>';
+    document.getElementById('port-status-msg').textContent = 'Could not scan ports.';
+    document.getElementById('port-status-msg').className = 'port-status-msg error';
+  }
+}
+
+async function connectPort() {
+  const port = document.getElementById('port-select').value;
+  const baud = document.getElementById('baud-select').value;
+  if (!port) return;
+
+  const btn = document.getElementById('connect-btn');
+  btn.disabled = true; btn.textContent = 'Connecting…';
+  setPortStatus('Connecting to ' + port + '…', '');
+
+  try {
+    await fetch('/api/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify({ port, baud: parseInt(baud) }),
+    });
+  } catch {
+    setPortStatus('Connection failed.', 'error');
+    btn.disabled = false; btn.textContent = 'Connect';
+  }
+}
+
+async function disconnectPort() {
+  await fetch('/api/disconnect', { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } });
+}
+
+function setPortStatus(msg, cls) {
+  const el = document.getElementById('port-status-msg');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'port-status-msg' + (cls ? ' ' + cls : '');
+}
+
+function setPortChip(port) {
+  const chip = document.getElementById('port-chip');
+  const name = document.getElementById('port-chip-name');
+  if (!chip || !name) return;
+  if (port) { name.textContent = port; chip.style.display = 'flex'; }
+  else { chip.style.display = 'none'; }
+}
+
+socket.on('port_status', ({ connected, port, error }) => {
+  const btn = document.getElementById('connect-btn');
+  if (connected) {
+    setPortChip(port);
+    setPortStatus('Connected to ' + port, 'success');
+    if (btn) { btn.disabled = false; btn.textContent = 'Connect'; }
+  } else {
+    setPortChip(null);
+    if (error) {
+      setPortStatus('Error: ' + error, 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'Connect'; }
+    } else {
+      setPortStatus('Disconnected. Select a port to reconnect.', '');
+    }
   }
 });
 
-socket.on('chat_message_received', ({ message }) => {
-  // Message already added locally
-});
+// ── ESP32-CAM ──
+const camUrlInput = document.getElementById('cam-url');
+const camStream   = document.getElementById('cam-stream');
+const camBtn      = document.getElementById('cam-btn');
+const camHolder   = document.getElementById('cam-placeholder');
+const camErr      = document.getElementById('cam-err');
 
-/* ── Analyze Now button ── */
-document.getElementById('analyze-btn').addEventListener('click', () => {
-  if (!lastSensorData || !groqEnabled) return;
-  showThinking();
-  const btn = document.getElementById('analyze-btn');
-  btn.disabled = true;
-  btn.textContent = 'Analyzing…';
-  socket.emit('request_analysis', lastSensorData);
-  setTimeout(() => {
-    btn.disabled = false;
-    btn.textContent = 'Analyze Now';
-  }, 32000);
-});
+// restore saved URL on load
+const savedCamUrl = localStorage.getItem('cam_url');
+if (savedCamUrl) camUrlInput.value = savedCamUrl;
+
+function toggleCamera() {
+  if (camBtn.classList.contains('active')) {
+    disconnectCamera();
+  } else {
+    connectCamera();
+  }
+}
+
+function connectCamera() {
+  const url = camUrlInput.value.trim();
+  if (!url) return;
+  localStorage.setItem('cam_url', url);
+  camErr.style.display = 'none';
+  camHolder.style.display = 'none';
+  camStream.style.display = 'block';
+  camStream.src = url;
+  camStream.onerror = () => {
+    camStream.style.display = 'none';
+    camHolder.style.display = 'none';
+    camErr.style.display = 'block';
+    camBtn.classList.remove('active');
+    camBtn.textContent = 'Connect';
+  };
+  camBtn.classList.add('active');
+  camBtn.textContent = 'Disconnect';
+}
+
+function disconnectCamera() {
+  camStream.src = '';
+  camStream.style.display = 'none';
+  camErr.style.display = 'none';
+  camHolder.style.display = 'block';
+  camBtn.classList.remove('active');
+  camBtn.textContent = 'Connect';
+}
+
+camUrlInput.addEventListener('keydown', e => { if (e.key === 'Enter') connectCamera(); });
 </script>
 </body>
 </html>
