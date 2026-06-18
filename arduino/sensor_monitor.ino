@@ -4,7 +4,7 @@
 // Set SIMULATE to 0 for real sensors (requires DHT, MPU6050, Wire libs)
 // ============================================================
 
-#define SIMULATE 1
+#define SIMULATE 0
 
 // --- Pin Definitions (ESP32) ---
 #define DHT_PIN      4
