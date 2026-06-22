@@ -52,10 +52,12 @@ app.register_blueprint(auth_bp)
 
 # Production-safe CORS: specify allowed origins explicitly
 _cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', '*').split(',')
+# Use threading for local dev (no extra dependencies), gevent for production (via gunicorn)
+_async_mode = 'threading' if _is_debug else 'gevent'
 socketio = SocketIO(
     app,
     cors_allowed_origins=_cors_origins,
-    async_mode='gevent',  # gevent for production; threading for dev
+    async_mode=_async_mode,
     ping_timeout=60,
     ping_interval=25,
 )
