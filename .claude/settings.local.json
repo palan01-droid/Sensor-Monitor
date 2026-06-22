@@ -75,7 +75,20 @@
       "Bash(git rm *)",
       "Bash(FLASK_DEBUG=1 SECRET_KEY=test python3 -c ' *)",
       "Bash(FLASK_DEBUG=1 SECRET_KEY=test python3 -c \"import app; print\\('import ok'\\)\")",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(lsof -ti:5050)",
+      "Bash(PORT=5050 python3 app.py)",
+      "Bash(echo \"PID=$!\")",
+      "Bash(kill 24171)",
+      "Bash(git -C /Users/anujpal/sensor_monitor status --short)",
+      "Bash(lsof -ti:5000)",
+      "Bash(jobs -l)",
+      "Bash(lsof -nP -iTCP:5000 -sTCP:LISTEN)",
+      "Bash(lsof *)",
+      "Bash(kill 7037)",
+      "Bash(kill -9 7037)",
+      "Bash(kill 24723)",
+      "Bash(git ls-files *)"
     ]
   }
 }

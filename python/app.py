@@ -225,8 +225,22 @@ def save_alert(ts: float, flags: list) -> None:
         logger.error(f"save_alert failed: {exc}")
 
 
+def sanitize_sensor_keys(data: dict) -> dict:
+    """Sanitize sensor data keys to prevent injection; allow alphanumeric + underscore"""
+    import re
+    safe_data = {}
+    key_pattern = re.compile(r'^[a-zA-Z0-9_]+$')
+    for key, value in data.items():
+        if key_pattern.match(key):
+            safe_data[key] = value
+        else:
+            logger.warning(f"Rejecting unsafe sensor key: {key}")
+    return safe_data
+
+
 def process_sensor_data(data: dict) -> None:
     global last_flags, last_sensor_data
+    data = sanitize_sensor_keys(data)  # Validate keys before processing
     flags = set(data.get('flags', []))
     with state_lock:
         last_sensor_data = data
@@ -569,8 +583,24 @@ def on_chat_message(data):
         socketio.emit('chat_response', {'error': 'No response from AI'})
 
 
+def _shutdown_handler(signum, frame):
+    """Graceful shutdown: stop serial thread and close DB"""
+    logger.info(f"Shutdown signal {signum} received, cleaning up...")
+    global serial_stop_event
+    serial_stop_event.set()
+    if serial_thread and serial_thread.is_alive():
+        serial_thread.join(timeout=2)
+    db.session.close()
+    logger.info("Cleanup complete, exiting")
+    exit(0)
+
+
 def _init_app():
     """Initialize app context and background tasks"""
+    import signal
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    signal.signal(signal.SIGINT, _shutdown_handler)
+
     with app.app_context():
         db.create_all()
         load_settings()
