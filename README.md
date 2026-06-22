@@ -2,6 +2,8 @@
 
 A real-time IoT sensor monitoring dashboard with AI-powered analysis and interactive chat. Monitor temperature, humidity, gas, light, distance, vibration, and IMU data with live charts and Groq AI insights.
 
+> **Production-Ready** ✅ See [PRODUCTION_READY.md](PRODUCTION_READY.md) for security hardening, testing coverage, and deployment checklists. Deploy to [Railway](DEPLOYMENT.md) in minutes.
+
 ## Features
 
 - 🎯 **Real-time Metrics** — Temperature, humidity, gas (MQ-2), alcohol (MQ-3), light, distance
