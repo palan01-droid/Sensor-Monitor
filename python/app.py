@@ -1,6 +1,7 @@
 import os
 import json
 import threading
+import logging
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 import time
@@ -12,6 +13,13 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from models import db, SensorReading, Alert, AppSetting
 from auth import auth_bp, login_required, SUPABASE_URL
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -41,7 +49,16 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True, 'pool_recycle'
 
 db.init_app(app)
 app.register_blueprint(auth_bp)
-socketio = SocketIO(app, cors_allowed_origins='*', async_mode='threading')
+
+# Production-safe CORS: specify allowed origins explicitly
+_cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', '*').split(',')
+socketio = SocketIO(
+    app,
+    cors_allowed_origins=_cors_origins,
+    async_mode='gevent',  # gevent for production; threading for dev
+    ping_timeout=60,
+    ping_interval=25,
+)
 
 csrf = CSRFProtect(app)
 limiter = Limiter(get_remote_address, app=app, storage_uri='memory://')
@@ -194,7 +211,7 @@ def save_reading(data: dict, flags: set) -> None:
         db.session.commit()
     except Exception as exc:
         db.session.rollback()
-        print(f"[db] save_reading failed: {exc}")
+        logger.error(f"save_reading failed: {exc}")
 
 
 def save_alert(ts: float, flags: list) -> None:
@@ -203,7 +220,7 @@ def save_alert(ts: float, flags: list) -> None:
         db.session.commit()
     except Exception as exc:
         db.session.rollback()
-        print(f"[db] save_alert failed: {exc}")
+        logger.error(f"save_alert failed: {exc}")
 
 
 def process_sensor_data(data: dict) -> None:
@@ -241,11 +258,11 @@ def serial_reader(port: str, baud: int, stop_event: threading.Event):
     try:
         import serial as pyserial
         ser = pyserial.Serial(port, baud, timeout=2)
-        print(f"[serial] Connected to {port} @ {baud} baud")
+        logger.info(f"Connected to serial port {port} @ {baud} baud")
         connected_port = port
         socketio.emit('port_status', {'connected': True, 'port': port})
     except Exception as exc:
-        print(f"[serial] Could not open port: {exc}")
+        logger.error(f"Could not open serial port {port}: {exc}")
         socketio.emit('port_status', {'connected': False, 'error': str(exc)})
         return
 
@@ -261,7 +278,7 @@ def serial_reader(port: str, baud: int, stop_event: threading.Event):
             except (json.JSONDecodeError, UnicodeDecodeError):
                 continue
             except Exception as exc:
-                print(f"[reader] {exc}")
+                logger.error(f"serial_reader error: {exc}")
                 db.session.rollback()
                 time.sleep(1)
 
@@ -271,7 +288,7 @@ def serial_reader(port: str, baud: int, stop_event: threading.Event):
         pass
     connected_port = None
     socketio.emit('port_status', {'connected': False})
-    print(f"[serial] Disconnected from {port}")
+    logger.info(f"Disconnected from serial port {port}")
 
 
 def start_serial_connection(port: str, baud: int):
@@ -301,10 +318,21 @@ def pruner():
                 SensorReading.query.filter(SensorReading.ts < cutoff).delete()
                 Alert.query.filter(Alert.ts < cutoff).delete()
                 db.session.commit()
-                print(f"[pruner] Pruned data older than {days} days")
+                logger.info(f"Pruned data older than {days} days")
             except Exception as exc:
                 db.session.rollback()
-                print(f"[pruner] Failed: {exc}")
+                logger.error(f"Pruner failed: {exc}")
+
+
+@app.route('/health')
+def health():
+    """Health check endpoint for load balancers and monitoring"""
+    try:
+        # Verify database connection
+        db.session.execute(db.text('SELECT 1'))
+        return jsonify({'status': 'ok', 'timestamp': time.time()}), 200
+    except Exception as exc:
+        return jsonify({'status': 'error', 'error': str(exc)}), 503
 
 
 @app.route('/')
@@ -539,14 +567,26 @@ def on_chat_message(data):
         socketio.emit('chat_response', {'error': 'No response from AI'})
 
 
-if __name__ == '__main__':
+def _init_app():
+    """Initialize app context and background tasks"""
     with app.app_context():
         db.create_all()
         load_settings()
-        print("[db] Tables ready")
+        logger.info("Database tables ready")
     if SERIAL_PORT:
         start_serial_connection(SERIAL_PORT, BAUD_RATE)
     socketio.start_background_task(pruner)
+    logger.info("Background tasks started (pruner, serial reader if configured)")
+
+
+if __name__ == '__main__':
+    _init_app()
     port = int(os.environ.get('PORT', 5000))
-    print(f"[app] Starting on http://0.0.0.0:{port}")
-    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+    if _is_debug:
+        # Local development: use Werkzeug dev server
+        logger.info(f"Starting in DEBUG mode on http://0.0.0.0:{port}")
+        socketio.run(app, host='0.0.0.0', port=port, debug=True)
+    else:
+        # Production: app is run by gunicorn, not socketio.run()
+        logger.info("Starting in PRODUCTION mode (use gunicorn)")
+        logger.warning("If running locally without gunicorn, set FLASK_DEBUG=1")
