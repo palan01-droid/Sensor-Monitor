@@ -1,9 +1,3 @@
-// ============================================================
-// Multi-Sensor Arduino Monitor
-// Set SIMULATE to 1 to run without hardware (no libraries needed)
-// Set SIMULATE to 0 for real sensors (requires DHT, MPU6050, Wire libs)
-// ============================================================
-
 #define SIMULATE 0
 
 // --- Pin Definitions (ESP32) ---
@@ -109,7 +103,6 @@ void loop() {
   lastMillis = millis();
 
 #if SIMULATE
-  // --- Simulated readings with realistic variation ---
   float t = millis() / 1000.0;
   float temp     = 25.0 + 5.0 * sin(t / 60.0) + frand(-0.3, 0.3);
   float humidity = 60.0 + 10.0 * cos(t / 90.0) + frand(-0.5, 0.5);
@@ -127,7 +120,6 @@ void loop() {
   float gz = frand(-0.3, 0.3);
 
 #else
-  // --- Real sensor reads ---
   float temp     = dht.readTemperature();
   float humidity = dht.readHumidity();
   int   gas      = analogRead(MQ2_PIN);
@@ -136,7 +128,7 @@ void loop() {
   bool  vibration  = digitalRead(VIBRATION_PIN);
   bool  ir_obstacle = !digitalRead(IR_PIN);  // active LOW
 
-  // HC-SR04
+
   digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
   digitalWrite(TRIG_PIN, HIGH);

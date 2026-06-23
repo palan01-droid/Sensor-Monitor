@@ -1,7 +1,33 @@
+# Secrets — never commit real .env files
 .env
+.env.local
+python/.env
+
+# Python
 *.pyc
+*.pyo
 __pycache__/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Database
 instance/
 *.db
-.DS_Store
+*.sqlite3
+
+# Node / JS tooling
+node_modules/
+package-lock.json
+npm-debug.log*
+yarn-error.log
+
+# Test / Coverage
 .pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
