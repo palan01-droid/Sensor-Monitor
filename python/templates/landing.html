@@ -1099,7 +1099,7 @@ footer {
 <section class="section sec-dark2" id="features">
   <div class="sec-label">Features</div>
   <h2 class="sec-h2">Everything a circuit needs.<br><em>Nothing it doesn't.</em></h2>
-  <p class="sec-sub">Built for hardware people who want real answers from their sensors — not another $300/month cloud IoT platform.</p>
+  <p class="sec-sub">Built as a capstone project to give anyone — hobbyist or student — real-time visibility into their circuits without the complexity.</p>
 
   <div class="bento">
     <!-- Big card: real-time streaming -->
@@ -1187,14 +1187,14 @@ footer {
   <div class="cta-glow"></div>
   <div class="sec-label" style="justify-content:center">Get started free</div>
   <h2 class="cta-h2">Your board is ready.<br><em>Is your dashboard?</em></h2>
-  <p class="cta-sub">Connect in under 60 seconds. No credit card. No config files. Just plug in and go.</p>
+  <p class="cta-sub">Built for CS students, hardware hackers, and anyone who wants real visibility into their circuits.</p>
   <div class="cta-btns">
-    <a href="#hero" class="cta-p" onclick="document.querySelector('[data-tab=signup]')&&document.querySelector('[data-tab=signup]').click();return false;">
-      Start Free <span class="parr">→</span>
+    <a href="#hero" class="cta-p" onclick="document.querySelector('[data-tab=signup]')&&document.querySelector('[data-tab=signup]').click();window.scrollTo({top:0,behavior:'smooth'});return false;">
+      Get Started <span class="parr">→</span>
     </a>
-    <a href="/dashboard" class="cta-s">Try Demo →</a>
+    <a href="#hero" class="cta-s" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Sign In →</a>
   </div>
-  <p class="cta-note">Open source · MIT License · Deploy to Railway in 5 minutes</p>
+  <p class="cta-note">Senior capstone project · Luther College · 2026</p>
 </div>
 
 <!-- =================== FOOTER =================== -->
@@ -1203,11 +1203,11 @@ footer {
     <div class="foot-logo">⬡</div>
     SensorMonitor
   </div>
-  <span class="foot-copy">© 2026 · Real-time monitoring for any microcontroller · MIT License</span>
+  <span class="foot-copy">© 2026 · Anuj Pal · Luther College · CS Senior Project</span>
   <div class="foot-links">
     <a href="/dashboard">Dashboard</a>
     <a href="/settings">Settings</a>
-    <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/anujpal" target="_blank" rel="noopener">GitHub</a>
   </div>
 </footer>
 
@@ -1553,7 +1553,8 @@ document.getElementById('login-form').addEventListener('submit',async e=>{
 
 document.getElementById('l-google').addEventListener('click',async()=>{
   if(!sb) return;
-  await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:`${location.origin}/auth/callback`}});
+  const {data}=await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:`${location.origin}/auth/callback`,skipBrowserRedirect:true}});
+  if(data?.url) window.location.href=data.url;
 });
 
 document.getElementById('signup-form').addEventListener('submit',async e=>{
@@ -1580,7 +1581,8 @@ document.getElementById('signup-form').addEventListener('submit',async e=>{
 
 document.getElementById('s-google').addEventListener('click',async()=>{
   if(!sb) return;
-  await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:`${location.origin}/auth/callback`}});
+  const {data}=await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:`${location.origin}/auth/callback`,skipBrowserRedirect:true}});
+  if(data?.url) window.location.href=data.url;
 });
 
 const p=new URLSearchParams(location.search);

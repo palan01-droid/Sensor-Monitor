@@ -1094,7 +1094,7 @@ socket.on('port_status', ({ connected, port, error }) => {
   const btn = document.getElementById('connect-btn');
   if (connected) {
     setPortChip(port);
-    setPortStatus('Connected to ' + port, 'success');
+    setPortStatus('Connected to ' + port + ' — waiting for sensor data. Make sure your Arduino is sending JSON e.g. {"temp":25.1,"humidity":60}', 'success');
     if (btn) { btn.disabled = false; btn.textContent = 'Connect'; }
   } else {
     setPortChip(null);

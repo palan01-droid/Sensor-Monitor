@@ -51,7 +51,7 @@ db.init_app(app)
 app.register_blueprint(auth_bp)
 
 # Production-safe CORS: specify allowed origins explicitly
-_cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', '*').split(',')
+_cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:5001').split(',')
 # Use threading for local dev (no extra dependencies), gevent for production (via gunicorn)
 _async_mode = 'threading' if _is_debug else 'gevent'
 socketio = SocketIO(
@@ -374,6 +374,7 @@ def auth_me():
 
 
 @app.route('/api/history')
+@login_required
 def api_history():
     range_map = {'1h': 3600, '24h': 86400, '7d': 604800, '30d': 2592000}
     seconds = range_map.get(request.args.get('range', '24h'), 86400)
@@ -388,6 +389,7 @@ def api_history():
 
 
 @app.route('/api/alerts')
+@login_required
 def api_alerts():
     try:
         limit = min(int(request.args.get('limit', 50)), 200)
@@ -403,6 +405,7 @@ def api_alerts():
 
 
 @app.route('/api/ports')
+@login_required
 def api_ports():
     try:
         import serial.tools.list_ports
@@ -416,6 +419,7 @@ def api_ports():
 
 
 @app.route('/api/connect', methods=['POST'])
+@login_required
 def api_connect():
     data = request.get_json() or {}
     port = data.get('port', '').strip()
@@ -430,6 +434,7 @@ def api_connect():
 
 
 @app.route('/api/disconnect', methods=['POST'])
+@login_required
 def api_disconnect():
     serial_stop_event.set()
     return jsonify({'ok': True})
@@ -551,7 +556,7 @@ def on_chat_message(data):
         emit('chat_response', {'error': 'Groq API not configured'})
         return
 
-    user_msg = data.get('message', '').strip()
+    user_msg = data.get('message', '').strip()[:2000]
     if not user_msg:
         return
 
