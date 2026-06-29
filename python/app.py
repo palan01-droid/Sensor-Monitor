@@ -358,6 +358,11 @@ def landing():
                            supabase_anon_key=os.environ.get('SUPABASE_ANON_KEY', ''))
 
 
+@app.route('/demo')
+def demo():
+    return render_template('index.html', demo=True, user_email='')
+
+
 @app.route('/dashboard')
 @login_required
 def index():

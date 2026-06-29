@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="csrf-token" content="{{ csrf_token() }}">
-<title>SensorMonitor — Dashboard</title>
+<title>SensorMonitor — {% if demo %}Demo{% else %}Dashboard{% endif %}</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
@@ -393,7 +393,7 @@ main { padding: 18px 24px; display: flex; flex-direction: column; gap: 18px; }
     <span class="header-title">SensorMonitor</span>
   </a>
   <span id="status-dot" class="dot"></span>
-  <span id="mode-badge" class="badge badge-off">Connecting…</span>
+  <span id="mode-badge" class="badge badge-off">{% if demo %}Simulated{% else %}Connecting…{% endif %}</span>
   <div class="header-right ml-auto">
     <div id="port-chip" class="port-chip" style="display:none">
       <span class="port-chip-dot"></span>
@@ -401,6 +401,9 @@ main { padding: 18px 24px; display: flex; flex-direction: column; gap: 18px; }
       <button class="port-disconnect" title="Disconnect" onclick="disconnectPort()">×</button>
     </div>
     <span id="last-update"></span>
+    {% if demo %}
+    <a href="/" style="font-size:12px;color:var(--accent);text-decoration:none;padding:5px 12px;border:1px solid var(--border);border-radius:6px">← Sign in for real data</a>
+    {% else %}
     {% if user_email %}
     <div class="user-chip">
       <div class="user-avatar">{{ user_email[0].upper() }}</div>
@@ -411,8 +414,15 @@ main { padding: 18px 24px; display: flex; flex-direction: column; gap: 18px; }
     {% if user_email %}
     <a href="/logout"><button class="logout-btn">Sign out</button></a>
     {% endif %}
+    {% endif %}
   </div>
 </header>
+
+{% if demo %}
+<div style="background:rgba(124,107,255,0.12);border-bottom:1px solid rgba(124,107,255,0.25);padding:8px 24px;font-size:12px;color:#a78bfa;text-align:center;font-family:monospace">
+  🔬 Demo Mode — Simulated sensor data streaming live &nbsp;·&nbsp; <a href="/" style="color:#a78bfa;font-weight:600">Sign in to connect real hardware →</a>
+</div>
+{% endif %}
 
 <div id="alert-bar" class="hidden">
   <div id="alert-bar-inner">
@@ -430,10 +440,10 @@ main { padding: 18px 24px; display: flex; flex-direction: column; gap: 18px; }
     <div class="radar-center">⬡</div>
   </div>
 
-  <h2 class="waiting-title">Connect your device</h2>
-  <p class="waiting-sub">Plug in any microcontroller, select its port, and hit Connect. The dashboard builds itself from whatever JSON your board sends.</p>
+  <h2 class="waiting-title">{% if demo %}Starting simulation…{% else %}Connect your device{% endif %}</h2>
+  <p class="waiting-sub">{% if demo %}Loading simulated sensor data — the dashboard will appear in a moment.{% else %}Plug in any microcontroller, select its port, and hit Connect. The dashboard builds itself from whatever JSON your board sends.{% endif %}</p>
 
-  <div class="port-selector">
+  <div class="port-selector" {% if demo %}style="display:none"{% endif %}>
     <div class="port-row">
       <div class="port-select-wrap">
         <select id="port-select">
@@ -580,7 +590,8 @@ main { padding: 18px 24px; display: flex; flex-direction: column; gap: 18px; }
 
 <script>
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
-const socket = io();
+const DEMO_MODE = {{ 'true' if demo else 'false' }};
+const socket = DEMO_MODE ? {on:()=>{},emit:()=>{}} : io();
 const N = 60;
 let lastSensorData = null;
 let groqEnabled = false;
@@ -963,9 +974,45 @@ async function loadHistory(range) {
   }
 }
 
-document.querySelectorAll('.range-btn').forEach(b => b.addEventListener('click', () => loadHistory(b.dataset.range)));
-loadHistory('1h');
-scanPorts();
+document.querySelectorAll('.range-btn').forEach(b => b.addEventListener('click', () => { if (!DEMO_MODE) loadHistory(b.dataset.range); }));
+
+if (DEMO_MODE) {
+  startDemoSimulation();
+} else {
+  loadHistory('1h');
+  scanPorts();
+}
+
+function startDemoSimulation() {
+  document.getElementById('waiting').style.display = 'none';
+  document.getElementById('main-content').style.display = 'block';
+  const dot = document.getElementById('status-dot');
+  const badge = document.getElementById('mode-badge');
+  dot.className = 'dot live';
+  badge.textContent = 'SIMULATED'; badge.className = 'badge badge-live';
+
+  let s = { temp:24.7, humidity:61.2, gas:212, distance:34.1, vibration:false };
+
+  function tick() {
+    s.temp     = Math.max(18, Math.min(42, s.temp     + (Math.random()-0.48)*0.7));
+    s.humidity = Math.max(20, Math.min(95, s.humidity + (Math.random()-0.5)*1.1));
+    s.gas      = Math.max(100,Math.min(600,s.gas      + (Math.random()-0.5)*12));
+    s.distance = Math.max(3, Math.min(200,s.distance  + (Math.random()-0.5)*4));
+    s.vibration= Math.random() > 0.93;
+    const flags = [];
+    if (s.temp > 36)      flags.push('HIGH_TEMP');
+    if (s.gas  > 450)     flags.push('HIGH_GAS');
+    if (s.distance < 8)   flags.push('CLOSE_OBJECT');
+    if (s.vibration)      flags.push('VIBRATION_DETECTED');
+    const data = {...s, flags};
+    lastSensorData = data;
+    update(data);
+    document.getElementById('last-update').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  }
+
+  tick();
+  setInterval(tick, 1200);
+}
 
 socket.on('connect', () => { document.getElementById('status-dot').className = 'dot live'; });
 
