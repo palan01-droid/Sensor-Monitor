@@ -617,7 +617,7 @@ if __name__ == '__main__':
     if _is_debug:
         # Local development: use Werkzeug dev server
         logger.info(f"Starting in DEBUG mode on http://0.0.0.0:{port}")
-        socketio.run(app, host='0.0.0.0', port=port, debug=True)
+        socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)
     else:
         # Production: app is run by gunicorn, not socketio.run()
         logger.info("Starting in PRODUCTION mode (use gunicorn)")
