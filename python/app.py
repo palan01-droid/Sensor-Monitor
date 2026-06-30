@@ -445,6 +445,35 @@ def api_disconnect():
     return jsonify({'ok': True})
 
 
+@app.route('/api/demo-chat', methods=['POST'])
+@limiter.limit('10 per minute')
+def api_demo_chat():
+    if not groq_client:
+        return jsonify({'error': 'AI not configured on this server'}), 503
+    body = request.get_json(silent=True) or {}
+    user_msg = str(body.get('message', '')).strip()[:500]
+    if not user_msg:
+        return jsonify({'error': 'No message'}), 400
+    sensor = body.get('sensor') or {}
+    sensor_lines = '\n'.join(
+        f"  {k}: {v}" for k, v in sensor.items() if k not in ('flags', 'simulated')
+    )
+    system = (
+        "You are an AI assistant in SensorMonitor, a real-time IoT dashboard. "
+        "The user is viewing a live demo with simulated sensor data. Be helpful and concise. "
+        f"{'Current simulated readings:\\n' + sensor_lines if sensor_lines else 'No sensor data available.'}"
+    )
+    try:
+        resp = groq_client.chat.completions.create(
+            model='llama-3.3-70b-versatile',
+            messages=[{'role': 'system', 'content': system}, {'role': 'user', 'content': user_msg}],
+            max_tokens=300, temperature=0.7,
+        )
+        return jsonify({'message': resp.choices[0].message.content.strip()})
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+
+
 @app.route('/api/ingest', methods=['POST'])
 @csrf.exempt
 @limiter.limit('120 per minute')

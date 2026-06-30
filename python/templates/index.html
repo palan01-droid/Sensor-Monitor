@@ -901,14 +901,32 @@ function removeTyping() {
   document.getElementById('typing-bubble')?.remove();
 }
 
-function sendChat() {
+async function sendChat() {
   const input = document.getElementById('chat-input');
   const msg = input.value.trim();
   if (!msg) return;
   input.value = '';
-  socket.emit('chat_message', { message: msg });
   document.getElementById('chat-send').disabled = true;
+  addChat(msg, 'user');
   showTyping();
+  if (DEMO_MODE) {
+    try {
+      const r = await fetch('/api/demo-chat', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+        body: JSON.stringify({message: msg, sensor: lastSensorData}),
+      });
+      const d = await r.json();
+      removeTyping();
+      addChat(d.message || d.error || 'No response', d.error ? 'error' : 'ai');
+    } catch(e) {
+      removeTyping();
+      addChat('Network error — try again', 'error');
+    }
+    document.getElementById('chat-send').disabled = false;
+  } else {
+    socket.emit('chat_message', { message: msg });
+  }
 }
 document.getElementById('chat-send').addEventListener('click', sendChat);
 document.getElementById('chat-input').addEventListener('keydown', e => {
@@ -1059,7 +1077,7 @@ socket.on('groq_analysis', ({ text }) => {
   btn.disabled = false; btn.textContent = 'Analyze Now';
 });
 
-socket.on('chat_message_received', ({ message }) => addChat(message, 'user'));
+socket.on('chat_message_received', ({ message }) => { if (!DEMO_MODE) addChat(message, 'user'); });
 socket.on('chat_response', ({ message, error }) => {
   removeTyping();
   addChat(error || message, error ? 'error' : 'ai');
