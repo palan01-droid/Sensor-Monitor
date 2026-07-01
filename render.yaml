@@ -1,9 +1,9 @@
 services:
   - type: web
     name: sensor-monitor
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    plan: free
+    runtime: python
+    buildCommand: pip install -r python/requirements.txt
+    startCommand: cd python && gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:$PORT app:app
     envVars:
       - key: FLASK_DEBUG
         value: "0"
