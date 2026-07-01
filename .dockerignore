@@ -1,0 +1,13 @@
+.git
+.gitignore
+.claude
+.env
+python/.env
+**/__pycache__
+**/*.pyc
+node_modules
+*.md
+arduino/
+instance/
+*.db
+*.sqlite3
