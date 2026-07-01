@@ -4,6 +4,7 @@ services:
     runtime: python
     buildCommand: pip install -r python/requirements.txt
     startCommand: cd python && gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:$PORT app:app
+    plan: free
     envVars:
       - key: FLASK_DEBUG
         value: "0"
