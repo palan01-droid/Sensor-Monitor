@@ -4,7 +4,7 @@ A real-time IoT sensor dashboard with AI chat. Connect an Arduino or ESP32 and m
 
 Built with Flask, WebSockets, Supabase auth, and the Groq LLM API.
 
-**[Live Demo →](https://sensor-monitor.onrender.com)**
+**[Live Demo →](https://sensor-monitor-n0rm.onrender.com)**
 
 ---
 
