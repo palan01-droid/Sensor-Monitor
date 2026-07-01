@@ -458,10 +458,11 @@ def api_demo_chat():
     sensor_lines = '\n'.join(
         f"  {k}: {v}" for k, v in sensor.items() if k not in ('flags', 'simulated')
     )
+    sensor_context = ("Current simulated readings:\n" + sensor_lines) if sensor_lines else "No sensor data available."
     system = (
         "You are an AI assistant in SensorMonitor, a real-time IoT dashboard. "
         "The user is viewing a live demo with simulated sensor data. Be helpful and concise. "
-        f"{'Current simulated readings:\\n' + sensor_lines if sensor_lines else 'No sensor data available.'}"
+        f"{sensor_context}"
     )
     try:
         resp = groq_client.chat.completions.create(
