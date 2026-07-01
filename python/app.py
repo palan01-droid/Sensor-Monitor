@@ -1,11 +1,17 @@
+# Anuj Pal - CS Senior Capstone - Luther College 2026
+# SensorMonitor: real-time IoT dashboard with AI chat
+# started this as a way to finally see what my Arduino was actually doing
+
 import os
 import json
 import threading
 import logging
-from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 import time
 from datetime import timedelta
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+
 from flask import Flask, render_template, jsonify, request, session
 from flask_socketio import SocketIO, emit
 from flask_wtf.csrf import CSRFProtect
@@ -14,33 +20,30 @@ from flask_limiter.util import get_remote_address
 from models import db, SensorReading, Alert, AppSetting
 from auth import auth_bp, login_required, SUPABASE_URL
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-_DEFAULT_SECRET = 'dev-secret-change-in-prod'
-_secret_key = os.environ.get('SECRET_KEY', _DEFAULT_SECRET)
 _is_debug = os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true')
-if _secret_key == _DEFAULT_SECRET and not _is_debug:
-    raise RuntimeError(
-        'SECRET_KEY is unset and FLASK_DEBUG is not enabled. '
-        'Set a real SECRET_KEY (e.g. via `python -c "import secrets; print(secrets.token_hex(32))"`) '
-        'before running outside local development.'
-    )
+_secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-in-prod')
+
+# don't let me accidentally deploy without a real secret key
+if _secret_key == 'dev-secret-change-in-prod' and not _is_debug:
+    raise RuntimeError('Set SECRET_KEY before running in production!')
+if not os.environ.get('SUPABASE_URL') and not _is_debug:
+    raise RuntimeError('Set SUPABASE_URL before running in production — without it all routes are unauthenticated!')
+if not os.environ.get('DEVICE_API_KEY') and not _is_debug:
+    raise RuntimeError('Set DEVICE_API_KEY before running in production — without it /api/ingest accepts data from anyone!')
+
 app.config['SECRET_KEY'] = _secret_key
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get(
-    'SESSION_COOKIE_SECURE', str(not _is_debug)
-).lower() in ('1', 'true')
+app.config['SESSION_COOKIE_SECURE'] = not _is_debug  # HTTPS only in prod
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 
 _db_url = os.environ.get('DATABASE_URL', 'sqlite:///sensor_monitor.db')
+# Heroku gives postgres:// but SQLAlchemy needs postgresql://
 if _db_url.startswith('postgres://'):
     _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
@@ -50,10 +53,8 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True, 'pool_recycle'
 db.init_app(app)
 app.register_blueprint(auth_bp)
 
-# Production-safe CORS: specify allowed origins explicitly
 _cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:5001').split(',')
-# Use threading for local dev (no extra dependencies), gevent for production (via gunicorn)
-_async_mode = 'threading' if _is_debug else 'gevent'
+_async_mode = 'threading' if _is_debug else 'gevent'  # gunicorn uses gevent workers
 socketio = SocketIO(
     app,
     cors_allowed_origins=_cors_origins,
@@ -68,7 +69,7 @@ limiter = Limiter(get_remote_address, app=app, storage_uri='memory://')
 SERIAL_PORT = os.environ.get('SERIAL_PORT')
 BAUD_RATE = int(os.environ.get('BAUD_RATE', '115200'))
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
-GROQ_COOLDOWN = 30
+GROQ_COOLDOWN = 30  # seconds between auto-analyses so we don't burn API credits
 DB_WRITE_INTERVAL = float(os.environ.get('DB_WRITE_INTERVAL', '5'))
 
 groq_client = None
@@ -76,20 +77,20 @@ if GROQ_API_KEY:
     from groq import Groq
     groq_client = Groq(api_key=GROQ_API_KEY)
 
-state_lock = threading.Lock()  # guards globals below, touched from serial/Socket.IO/request threads
+state_lock = threading.Lock()  # multiple threads touch these globals
 
-last_flags: set = set()
-last_groq_time: float = 0.0
-last_db_write: float = 0.0
-alert_history: list = []
-chat_history: list = []
-last_sensor_data: dict = {}
-chat_last_sent: dict = {}  # socket sid -> last chat_message timestamp
-CHAT_MIN_INTERVAL = 2.0  # seconds between chat messages per connection
+last_flags = set()
+last_groq_time = 0.0
+last_db_write = 0.0
+alert_history = []
+chat_history = []   # TODO: each user should have their own chat history, not shared
+last_sensor_data = {}
+chat_last_sent = {}
+CHAT_MIN_INTERVAL = 2.0  # basic rate limit per connection
 
-serial_stop_event: threading.Event = threading.Event()
-serial_thread: threading.Thread | None = None
-connected_port: str | None = None
+serial_stop_event = threading.Event()
+serial_thread = None
+connected_port = None
 
 SETTINGS_DEFAULTS = {
     'default_baud': 115200,
@@ -106,7 +107,7 @@ def load_settings():
             settings_cache[row.key] = row.value
 
 
-def save_setting(key: str, value):
+def save_setting(key, value):
     settings_cache[key] = value
     row = db.session.get(AppSetting, key)
     if row:
@@ -116,13 +117,13 @@ def save_setting(key: str, value):
     db.session.commit()
 
 
-def chat_with_groq(user_message: str) -> str | None:
+def chat_with_groq(user_message):
     if not groq_client:
         return None
 
     with state_lock:
         sensor_snapshot = dict(last_sensor_data)
-        recent_history = list(chat_history[-10:])
+        recent_history = list(chat_history[-10:])  # last 10 messages for context
 
     sensor_lines = ''
     active_flags = []
@@ -163,7 +164,7 @@ Keep responses natural and conversational. Don't be robotic or overly formal. Ma
         return f"Error: {exc}"
 
 
-def analyze_with_groq(data: dict, flags: list) -> str | None:
+def analyze_with_groq(data, flags):
     global last_groq_time
     if not groq_client or not flags:
         return None
@@ -199,7 +200,7 @@ def analyze_with_groq(data: dict, flags: list) -> str | None:
         return f"Analysis unavailable: {exc}"
 
 
-def save_reading(data: dict, flags: set) -> None:
+def save_reading(data, flags):
     global last_db_write
     now = time.time()
     with state_lock:
@@ -216,7 +217,7 @@ def save_reading(data: dict, flags: set) -> None:
         logger.error(f"save_reading failed: {exc}")
 
 
-def save_alert(ts: float, flags: list) -> None:
+def save_alert(ts, flags):
     try:
         db.session.add(Alert(ts=ts, flags=flags))
         db.session.commit()
@@ -225,8 +226,8 @@ def save_alert(ts: float, flags: list) -> None:
         logger.error(f"save_alert failed: {exc}")
 
 
-def sanitize_sensor_keys(data: dict) -> dict:
-    """Sanitize sensor data keys to prevent injection; allow alphanumeric + underscore"""
+def sanitize_sensor_keys(data):
+    # only allow alphanumeric + underscore in keys so nothing funky gets into the DB
     import re
     safe_data = {}
     key_pattern = re.compile(r'^[a-zA-Z0-9_]+$')
@@ -238,13 +239,13 @@ def sanitize_sensor_keys(data: dict) -> dict:
     return safe_data
 
 
-def process_sensor_data(data: dict) -> None:
+def process_sensor_data(data):
     global last_flags, last_sensor_data
     data = sanitize_sensor_keys(data)  # Validate keys before processing
     flags = set(data.get('flags', []))
     with state_lock:
         last_sensor_data = data
-    payload: dict = {'sensor': data, 'ts': time.time()}
+    payload = {'sensor': data, 'ts': time.time()}
 
     save_reading(data, flags)
 
@@ -325,6 +326,7 @@ def start_serial_connection(port: str, baud: int):
 
 
 def pruner():
+    # runs in background, deletes old readings once a day so the DB doesn't grow forever
     while True:
         time.sleep(86400)
         with app.app_context():
@@ -342,9 +344,7 @@ def pruner():
 
 @app.route('/health')
 def health():
-    """Health check endpoint for load balancers and monitoring"""
     try:
-        # Verify database connection
         db.session.execute(db.text('SELECT 1'))
         return jsonify({'status': 'ok', 'timestamp': time.time()}), 200
     except Exception as exc:
@@ -397,7 +397,7 @@ def api_history():
 @login_required
 def api_alerts():
     try:
-        limit = min(int(request.args.get('limit', 50)), 200)
+        limit = min(int(request.args.get('limit', 50)), 200)  # cap at 200
     except ValueError:
         return jsonify({'error': 'limit must be an integer'}), 400
     alerts = (
@@ -478,7 +478,8 @@ def api_demo_chat():
 @csrf.exempt
 @limiter.limit('120 per minute')
 def api_ingest():
-    # WiFi boards can't hold a login session or a CSRF token — protect with an API key instead.
+    # WiFi microcontrollers can't hold sessions, so use a simple API key header instead
+    # TODO: right now all devices share one key — would be better to have per-device keys
     api_key = os.environ.get('DEVICE_API_KEY', '')
     if api_key and request.headers.get('X-API-Key') != api_key:
         return jsonify({'error': 'Invalid or missing X-API-Key header'}), 401
@@ -554,12 +555,13 @@ def api_clear_data():
 @socketio.on('connect')
 def on_connect():
     if SUPABASE_URL and 'user_id' not in session:
-        return False  # reject unauthenticated WebSocket connections
+        return False  # not logged in, kick them off
     db_alerts = Alert.query.order_by(Alert.ts.desc()).limit(50).all()
+    # send initial state so the dashboard populates immediately on load
     emit('config', {
         'groq_available': groq_client is not None,
         'alert_history': [a.to_dict() for a in reversed(db_alerts)],
-        'chat_history': chat_history,
+        'chat_history': chat_history,  # TODO: this should be per-user, not global
         'connected_port': connected_port,
         'default_baud': settings_cache['default_baud'],
     })
@@ -623,41 +625,33 @@ def on_chat_message(data):
 
 
 def _shutdown_handler(signum, frame):
-    """Graceful shutdown: stop serial thread and close DB"""
-    logger.info(f"Shutdown signal {signum} received, cleaning up...")
-    global serial_stop_event
+    logger.info(f"Shutting down (signal {signum})...")
     serial_stop_event.set()
     if serial_thread and serial_thread.is_alive():
         serial_thread.join(timeout=2)
     db.session.close()
-    logger.info("Cleanup complete, exiting")
     exit(0)
 
 
 def _init_app():
-    """Initialize app context and background tasks"""
     import signal
     signal.signal(signal.SIGTERM, _shutdown_handler)
     signal.signal(signal.SIGINT, _shutdown_handler)
 
     with app.app_context():
-        db.create_all()
+        db.create_all()  # sqlite works fine for now, might move to postgres later
         load_settings()
-        logger.info("Database tables ready")
     if SERIAL_PORT:
         start_serial_connection(SERIAL_PORT, BAUD_RATE)
     socketio.start_background_task(pruner)
-    logger.info("Background tasks started (pruner, serial reader if configured)")
 
 
 if __name__ == '__main__':
     _init_app()
     port = int(os.environ.get('PORT', 5000))
     if _is_debug:
-        # Local development: use Werkzeug dev server
-        logger.info(f"Starting in DEBUG mode on http://0.0.0.0:{port}")
         socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)
     else:
-        # Production: app is run by gunicorn, not socketio.run()
-        logger.info("Starting in PRODUCTION mode (use gunicorn)")
+        # in production, gunicorn launches this — socketio.run() is dev-only
+        logger.info("Production mode: run with gunicorn")
         logger.warning("If running locally without gunicorn, set FLASK_DEBUG=1")

@@ -3,6 +3,9 @@
 .env.local
 python/.env
 
+# Local Claude Code config
+.claude/
+
 # Python
 *.pyc
 *.pyo

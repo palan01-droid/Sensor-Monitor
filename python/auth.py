@@ -1,7 +1,9 @@
+# Anuj Pal - CS Senior Capstone - Luther College 2026
+# handles Google OAuth via Supabase — took a while to figure out the callback flow
+
 import os
-from datetime import timedelta
 from functools import wraps
-from flask import Blueprint, render_template, request, session, redirect, jsonify, current_app
+from flask import Blueprint, render_template, request, session, redirect, jsonify
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -12,6 +14,7 @@ _sb = None
 
 
 def _get_sb():
+    # lazy-init the supabase client so we don't crash on import if keys aren't set
     global _sb
     if _sb is None and SUPABASE_URL and SUPABASE_ANON_KEY:
         from supabase import create_client
@@ -22,9 +25,8 @@ def _get_sb():
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        # If Supabase is not configured, skip auth (local dev mode)
         if not SUPABASE_URL:
-            return f(*args, **kwargs)
+            return f(*args, **kwargs)  # skip auth in local dev (no Supabase configured)
         if 'user_id' not in session:
             return redirect('/login')
         return f(*args, **kwargs)
@@ -58,13 +60,14 @@ def auth_callback():
 
 @auth_bp.route('/auth/session', methods=['POST'])
 def set_session():
+    # auth_callback.html calls this after Google login to store the user in Flask session
     body = request.get_json()
     if not body or 'access_token' not in body:
         return jsonify({'error': 'Missing token'}), 400
 
     sb = _get_sb()
     if not sb:
-        return jsonify({'error': 'Auth not configured — set SUPABASE_URL and SUPABASE_ANON_KEY'}), 500
+        return jsonify({'error': 'Auth not configured'}), 500
 
     try:
         resp = sb.auth.get_user(body['access_token'])
@@ -83,3 +86,4 @@ def set_session():
 def logout():
     session.clear()
     return redirect('/login')
+    # TODO: also call supabase signOut so the token is invalidated server-side
