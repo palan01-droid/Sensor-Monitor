@@ -3,9 +3,10 @@ services:
     name: sensor-monitor
     runtime: docker
     dockerfilePath: ./Dockerfile
+    plan: free
     envVars:
       - key: FLASK_DEBUG
-        value: 0
+        value: "0"
       - key: SECRET_KEY
         generateValue: true
       - key: DEVICE_API_KEY
