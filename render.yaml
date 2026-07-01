@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: sensor-monitor
+    runtime: python
+    buildCommand: pip install -r python/requirements.txt
+    startCommand: cd python && gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:$PORT app:app
+    envVars:
+      - key: FLASK_DEBUG
+        value: 0
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEVICE_API_KEY
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sensor-monitor-db
+          property: connectionString
+
+databases:
+  - name: sensor-monitor-db
+    databaseName: sensor_monitor
+    user: sensor_monitor
